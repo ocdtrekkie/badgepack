@@ -832,90 +832,6 @@
             }
         }
 
-        // Process badge data
-        async function processBadgeData(data) {
-            if (!data || typeof data !== 'object') return null;
-
-            if (data._badgeUrl) {
-                const remoteData = await fetchRemoteData(data._badgeUrl);
-                if (!remoteData) return null;
-                data = remoteData;
-            }
-
-            try {
-                let badge;
-
-                if (data['@context']) {
-                    const types = Array.isArray(data.type) ? data.type : (data.type ? [data.type] : []);
-                    if (types.includes('VerifiableCredential') || types.includes('AchievementCredential') ||
-                        (data['@context'] && (Array.isArray(data['@context']) ?
-                         data['@context'].some(ctx => typeof ctx === 'string' && ctx.includes('openbadges')) :
-                         typeof data['@context'] === 'string' && data['@context'].includes('openbadges')))) {
-                        badge = parseOB3(data);
-                    } else {
-                        badge = parseOB2(data);
-                    }
-                } else if (data.badge || data.recipient) {
-                    badge = parseOB2(data);
-                } else {
-                    return null;
-                }
-
-                return badge;
-            } catch (e) {
-                console.error('Error parsing badge:', e);
-                return null;
-            }
-        }
-
-        // Parse OB2
-        function parseOB2(data) {
-            return {
-                id: 'badge_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
-                version: '2.0',
-                type: data.type || 'Unknown',
-                badgeName: data.badge?.name || null,
-                description: data.badge?.description || null,
-                issuerName: data.badge?.issuer?.name || null,
-                issuerUrl: data.badge?.issuer?.url || null,
-                issuerEmail: data.badge?.issuer?.email || null,
-                credentialProvider: detectProvider(data),
-                issuanceDate: data.issuedOn || null,
-                expiresDate: data.expires || null,
-                recipientIdentity: typeof data.recipient === 'object' ? data.recipient.identity : data.recipient,
-                rawData: data
-            };
-        }
-
-        // Parse OB3
-        function parseOB3(data) {
-            return {
-                id: 'badge_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
-                version: '3.0',
-                type: Array.isArray(data.type) ? data.type.join(', ') : data.type || 'Unknown',
-                badgeName: data.credentialSubject?.achievement?.name || null,
-                description: data.credentialSubject?.achievement?.description || null,
-                issuerName: data.issuer?.name || null,
-                issuerUrl: data.issuer?.id || data.issuer?.url || null,
-                issuerEmail: data.issuer?.email || null,
-                credentialProvider: detectProvider(data),
-                issuanceDate: data.validFrom || data.issuanceDate || null,
-                expiresDate: data.validUntil || data.expirationDate || null,
-                recipientIdentity: data.credentialSubject?.id || null,
-                rawData: data
-            };
-        }
-
-        // Detect provider
-        function detectProvider(data) {
-            const rawStr = JSON.stringify(data).toLowerCase();
-            if (rawStr.includes('linkedin')) return 'LinkedIn';
-            if (rawStr.includes('credly')) return 'Credly';
-            if (rawStr.includes('badgr')) return 'Badgr';
-            if (rawStr.includes('mozilla')) return 'Mozilla';
-            return 'Unknown';
-        }
-
         // Fetch remote data
         async function fetchRemoteData(url) {
             if (!url || typeof url !== 'string') return null;
@@ -936,9 +852,111 @@
                     return await response.json();
                 }
             } catch (error) {
-                console.warn('Error fetching remote data:', error);
+                console.warn('Error fetching remote data from', url, ':', error);
             }
             return null;
+        }
+
+        // Process badge data - enriches with remote data if available
+        async function processBadgeData(data) {
+            if (!data || typeof data !== 'object') return null;
+
+            try {
+                let badge;
+
+                // Detect if this is OB3 or OB2
+                const isOB3 = data['@context'] && (Array.isArray(data.type) ? 
+                    data.type.includes('VerifiableCredential') || data.type.includes('AchievementCredential') : 
+                    (data.type && (data.type.includes('VerifiableCredential') || data.type.includes('AchievementCredential'))));
+
+                if (isOB3) {
+                    badge = await parseOB3(data);
+                } else {
+                    badge = await parseOB2(data);
+                }
+
+                return badge;
+            } catch (e) {
+                console.error('Error parsing badge:', e);
+                return null;
+            }
+        }
+
+        // Parse OB2 - with remote data fetching
+        async function parseOB2(data) {
+            let badgeClassData = null;
+            let issuanceDate = data.issuedOn || null;
+            let expiresDate = data.expires || null;
+
+            // Try to fetch remote badge class if badge is a URL
+            if (data.badge && typeof data.badge === 'string') {
+                badgeClassData = await fetchRemoteData(data.badge);
+                console.log('Fetched BadgeClass from:', data.badge, badgeClassData);
+            } else if (data.badge && typeof data.badge === 'object') {
+                badgeClassData = data.badge;
+            }
+
+            // Try to fetch from verify.url if no direct date found
+            if (!issuanceDate && !expiresDate && data.verify?.url) {
+                const assertionData = await fetchRemoteData(data.verify.url);
+                if (assertionData) {
+                    issuanceDate = issuanceDate || assertionData.issuedOn || null;
+                    expiresDate = expiresDate || assertionData.expires || null;
+                }
+            }
+
+            // Extract badge name and description from BadgeClass
+            let badgeName = null;
+            let description = null;
+            if (badgeClassData) {
+                badgeName = badgeClassData.name || null;
+                description = badgeClassData.description || null;
+            }
+
+            return {
+                id: 'badge_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+                version: '2.0',
+                type: data.type || 'Unknown',
+                badgeName: badgeName || data.badge?.name || null,
+                description: description || data.badge?.description || null,
+                issuerName: data.badge?.issuer?.name || data.issuer?.name || null,
+                issuerUrl: data.badge?.issuer?.url || data.issuer?.url || null,
+                issuerEmail: data.badge?.issuer?.email || data.issuer?.email || null,
+                credentialProvider: detectProvider(data),
+                issuanceDate: issuanceDate,
+                expiresDate: expiresDate,
+                recipientIdentity: typeof data.recipient === 'object' ? data.recipient.identity : data.recipient,
+                rawData: data
+            };
+        }
+
+        // Parse OB3 - with remote data fetching
+        async function parseOB3(data) {
+            return {
+                id: 'badge_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+                version: '3.0',
+                type: Array.isArray(data.type) ? data.type.join(', ') : data.type || 'Unknown',
+                badgeName: data.credentialSubject?.achievement?.name || null,
+                description: data.credentialSubject?.achievement?.description || null,
+                issuerName: data.issuer?.name || null,
+                issuerUrl: data.issuer?.id || data.issuer?.url || null,
+                issuerEmail: data.issuer?.email || null,
+                credentialProvider: detectProvider(data),
+                issuanceDate: data.validFrom || data.issuanceDate || null,
+                expiresDate: data.validTo || data.expirationDate || null,
+                recipientIdentity: data.credentialSubject?.id || null,
+                rawData: data
+            };
+        }
+
+        // Detect provider
+        function detectProvider(data) {
+            const rawStr = JSON.stringify(data).toLowerCase();
+            if (rawStr.includes('linkedin')) return 'LinkedIn';
+            if (rawStr.includes('credly')) return 'Credly';
+            if (rawStr.includes('badgr')) return 'Badgr';
+            if (rawStr.includes('mozilla')) return 'Mozilla';
+            return 'Unknown';
         }
 
         // Format date for display
@@ -946,6 +964,7 @@
             if (!dateString) return null;
             try {
                 const date = new Date(dateString);
+                if (isNaN(date.getTime())) return dateString;
                 return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
             } catch (e) {
                 return dateString;
