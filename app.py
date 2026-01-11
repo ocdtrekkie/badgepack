@@ -8,6 +8,7 @@ import hashlib
 from io import BytesIO
 import requests
 from urllib.parse import urljoin
+import certifi
 
 # Initialize Flask app
 instance_path = '/var'
@@ -21,6 +22,20 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['MAX_CONTENT_LENGTH'] = 52428800  # 50MB max file size
 
 db = SQLAlchemy(app)
+
+# Powerbox HTTP Proxy configuration
+POWERBOX_PROXY_PORT = os.environ.get('POWERBOX_PROXY_PORT', '4000')
+POWERBOX_WEBSOCKET_PORT = os.environ.get('POWERBOX_WEBSOCKET_PORT', '3000')
+CA_CERT_PATH = os.environ.get('CA_CERT_PATH', '/tmp/ca.crt')
+
+# Configure requests to use powerbox proxy and trust its CA cert
+def setup_proxy():
+    """Configure requests library to use powerbox-http-proxy"""
+    if os.path.exists(CA_CERT_PATH):
+        os.environ['REQUESTS_CA_BUNDLE'] = CA_CERT_PATH
+        os.environ['CURL_CA_BUNDLE'] = CA_CERT_PATH
+
+setup_proxy()
 
 # Database Model
 class Badge(db.Model):
@@ -78,6 +93,95 @@ def serve_frontend():
     """Serve the main frontend HTML"""
     return render_template('index.html')
 
+# ===== POWERBOX PROXY ROUTES =====
+
+@app.route('/_sandstorm/websocket', methods=['GET', 'POST', 'OPTIONS'])
+@app.route('/_sandstorm/websocket/<path:path>', methods=['GET', 'POST', 'OPTIONS'])
+def proxy_websocket(path=''):
+    """Proxy requests to powerbox-http-proxy daemon on port 3000"""
+    try:
+        # Handle OPTIONS requests (CORS preflight)
+        if request.method == 'OPTIONS':
+            return '', 204
+        
+        # Build target URL
+        target_url = f'http://127.0.0.1:{POWERBOX_WEBSOCKET_PORT}/'
+        if path:
+            target_url += path
+        
+        # Add query string if present
+        if request.query_string:
+            target_url += '?' + request.query_string.decode('utf-8')
+        
+        print(f"Proxying {request.method} request to: {target_url}")
+        
+        # For WebSocket upgrade requests
+        if request.headers.get('Upgrade', '').lower() == 'websocket':
+            # WebSocket upgrades should work with the JavaScript client
+            print("WebSocket upgrade detected - client should handle directly")
+            return '', 101  # Switching Protocols
+        
+        # Regular HTTP proxy
+        headers = {key: value for key, value in request.headers if key.lower() not in ['host', 'connection', 'content-length']}
+        
+        response = requests.request(
+            method=request.method,
+            url=target_url,
+            headers=headers,
+            data=request.get_data(),
+            cookies=request.cookies,
+            timeout=30,
+            allow_redirects=False,
+            verify=False  # Powerbox uses self-signed certs, verify in production with CA_CERT_PATH
+        )
+        
+        print(f"Response status: {response.status_code}")
+        
+        # Return proxied response
+        excluded_headers = ['content-encoding', 'content-length', 'transfer-encoding', 'connection']
+        headers = {key: value for key, value in response.headers.items() if key.lower() not in excluded_headers}
+        
+        return response.content, response.status_code, headers
+    
+    except Exception as e:
+        print(f"Websocket proxy error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+        
+def _proxy_http_request(target_url):
+    """Proxy regular HTTP request to powerbox daemon"""
+    try:
+        headers = {key: value for key, value in request.headers if key.lower() not in ['host', 'connection']}
+        
+        response = requests.request(
+            method=request.method,
+            url=target_url,
+            headers=headers,
+            data=request.get_data(),
+            cookies=request.cookies,
+            verify=CA_CERT_PATH if os.path.exists(CA_CERT_PATH) else True,
+            timeout=30,
+            allow_redirects=False
+        )
+        
+        # Return proxied response
+        excluded_headers = ['content-encoding', 'content-length', 'transfer-encoding', 'connection']
+        headers = {key: value for key, value in response.headers.items() if key.lower() not in excluded_headers}
+        
+        return response.content, response.status_code, headers
+    
+    except Exception as e:
+        print(f"HTTP proxy error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+def _proxy_websocket_upgrade(target_url):
+    """Handle WebSocket upgrade requests (pass through headers)"""
+    # Note: True WebSocket proxying requires special handling. 
+    # For now, return that WebSocket is being proxied.
+    print(f"WebSocket upgrade requested to {target_url}")
+    return jsonify({'message': 'WebSocket proxying configured'}), 200
+
 # ===== UTILITY ROUTES =====
 
 @app.route('/api/fetch-remote', methods=['POST'])
@@ -94,8 +198,24 @@ def fetch_remote():
         if not isinstance(url, str) or not (url.startswith('http://') or url.startswith('https://')):
             return jsonify({'error': 'Invalid URL'}), 400
         
+        # Use powerbox proxy if POWERBOX_PROXY_PORT is set
+        proxies = None
+        if POWERBOX_PROXY_PORT:
+            proxy_url = f'http://127.0.0.1:{POWERBOX_PROXY_PORT}'
+            proxies = {
+                'http': proxy_url,
+                'https': proxy_url
+            }
+        
         # Fetch with timeout
-        response = requests.get(url, timeout=5, headers={'Accept': 'application/json'})
+        verify_cert = CA_CERT_PATH if os.path.exists(CA_CERT_PATH) else True
+        response = requests.get(
+            url, 
+            timeout=5, 
+            headers={'Accept': 'application/json'},
+            proxies=proxies,
+            verify=verify_cert
+        )
         
         if response.status_code == 200:
             return jsonify({'data': response.json()}), 200
@@ -116,7 +236,19 @@ def fetch_remote():
 @app.route('/api/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""
-    return jsonify({'status': 'healthy', 'message': 'Backend is running'}), 200
+    powerbox_status = 'not configured'
+    if POWERBOX_PROXY_PORT:
+        try:
+            requests.get(f'http://127.0.0.1:{POWERBOX_PROXY_PORT}', timeout=1)
+            powerbox_status = 'connected'
+        except:
+            powerbox_status = 'disconnected'
+    
+    return jsonify({
+        'status': 'healthy', 
+        'message': 'Backend is running',
+        'powerbox': powerbox_status
+    }), 200
 
 @app.route('/api/badges', methods=['GET'])
 def get_all_badges():

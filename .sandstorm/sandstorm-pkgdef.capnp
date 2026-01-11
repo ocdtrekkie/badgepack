@@ -234,6 +234,8 @@ const myCommand :Spk.Manifest.Command = (
     # Note that this defines the *entire* environment seen by your app.
     (key = "PATH", value = "/usr/local/bin:/usr/bin:/bin"),
     (key = "SANDSTORM", value = "1"),
+    (key = "POWERBOX_WEBSOCKET_PORT", value = "3000"),
+    (key = "POWERBOX_PROXY_PORT", value = "4000"),
     # Export SANDSTORM=1 into the environment, so that apps running within Sandstorm
     # can detect if $SANDSTORM="1" at runtime, switching UI and/or backend to use
     # the app's Sandstorm-specific integration code.
