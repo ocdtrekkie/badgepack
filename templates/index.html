@@ -840,10 +840,10 @@
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-                const response = await fetch(url, {
-                    mode: 'cors',
-                    headers: { 'Accept': 'application/json' },
-                    signal: controller.signal
+                const response = await fetch(`${API_BASE}/fetch-remote`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url })
                 });
 
                 clearTimeout(timeoutId);

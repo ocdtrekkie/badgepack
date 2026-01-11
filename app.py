@@ -6,6 +6,8 @@ import os
 import json
 import hashlib
 from io import BytesIO
+import requests
+from urllib.parse import urljoin
 
 # Initialize Flask app
 instance_path = '/var'
@@ -75,6 +77,39 @@ with app.app_context():
 def serve_frontend():
     """Serve the main frontend HTML"""
     return render_template('index.html')
+
+# ===== UTILITY ROUTES =====
+
+@app.route('/api/fetch-remote', methods=['POST'])
+def fetch_remote():
+    """Proxy endpoint for fetching remote badge data with CORS support"""
+    try:
+        data = request.json
+        url = data.get('url')
+        
+        if not url:
+            return jsonify({'error': 'Missing URL'}), 400
+        
+        # Validate URL
+        if not isinstance(url, str) or not (url.startswith('http://') or url.startswith('https://')):
+            return jsonify({'error': 'Invalid URL'}), 400
+        
+        # Fetch with timeout
+        response = requests.get(url, timeout=5, headers={'Accept': 'application/json'})
+        
+        if response.status_code == 200:
+            return jsonify({'data': response.json()}), 200
+        else:
+            return jsonify({'error': f'Remote server returned {response.status_code}'}), response.status_code
+    
+    except requests.exceptions.Timeout:
+        return jsonify({'error': 'Request timeout'}), 504
+    except requests.exceptions.RequestException as e:
+        return jsonify({'error': str(e)}), 400
+    except json.JSONDecodeError:
+        return jsonify({'error': 'Invalid JSON response'}), 400
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 # ===== API ROUTES =====
 
