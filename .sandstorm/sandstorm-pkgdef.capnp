@@ -17,7 +17,7 @@ const pkgdef :Spk.PackageDefinition = (
     # This manifest is included in your app package to tell Sandstorm
     # about your app.
 
-    appTitle = (defaultText = "OpenBadges"),
+    appTitle = (defaultText = "Badgepack"),
 
     appVersion = 0,  # Increment this for every release.
 
@@ -27,7 +27,7 @@ const pkgdef :Spk.PackageDefinition = (
 
     actions = [
       # Define your "new document" handlers here.
-      ( nounPhrase = (defaultText = "instance"),
+      ( nounPhrase = (defaultText = "wallet"),
         command = .myCommand
         # The command to run when starting for the first time. (".myCommand"
         # is just a constant defined at the bottom of the file.)
@@ -91,12 +91,6 @@ const pkgdef :Spk.PackageDefinition = (
         #
         # Further details including how to set up GPG and how to use keybase.io can be found
         # at https://docs.sandstorm.io/en/latest/developing/publishing-apps/#verify-your-identity
-
-        upstreamAuthor = "Example App Team",
-        # Name of the original primary author of this app, if it is different from the person who
-        # produced the Sandstorm package. Setting this implies that the author connected to the PGP
-        # signature only "packaged" the app for Sandstorm, rather than developing the app.
-        # Remove this line if you consider yourself as the author of the app.
       ),
 
       #pgpKeyring = embed "path/to/pgp-keyring",
@@ -114,7 +108,7 @@ const pkgdef :Spk.PackageDefinition = (
       # in an app store. Note that the Markdown is not permitted to contain HTML nor image tags (but
       # you can include a list of screenshots separately).
 
-      shortDescription = (defaultText = "one-to-three words"),
+      shortDescription = (defaultText = "Certification wallet"),
       # A very short (one-to-three words) description of what the app does. For example,
       # "Document editor", or "Notetaking", or "Email client". This will be displayed under the app
       # title in the grid view in the app market.
