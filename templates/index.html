@@ -260,6 +260,19 @@
             margin-bottom: 8px;
         }
 
+        .badge-dates {
+            font-size: 12px;
+            color: var(--color-text-secondary);
+            margin: 8px 0;
+            padding: 8px 0;
+            border-top: 1px solid var(--color-border);
+            border-bottom: 1px solid var(--color-border);
+        }
+
+        .date-item {
+            margin: 4px 0;
+        }
+
         .badge-tags {
             display: flex;
             gap: 6px;
@@ -886,8 +899,8 @@
                 issuerUrl: data.issuer?.id || data.issuer?.url || null,
                 issuerEmail: data.issuer?.email || null,
                 credentialProvider: detectProvider(data),
-                issuanceDate: data.issuanceDate || null,
-                expiresDate: data.expirationDate || null,
+                issuanceDate: data.validFrom || data.issuanceDate || null,
+                expiresDate: data.validUntil || data.expirationDate || null,
                 recipientIdentity: data.credentialSubject?.id || null,
                 rawData: data
             };
@@ -926,6 +939,17 @@
                 console.warn('Error fetching remote data:', error);
             }
             return null;
+        }
+
+        // Format date for display
+        function formatDate(dateString) {
+            if (!dateString) return null;
+            try {
+                const date = new Date(dateString);
+                return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+            } catch (e) {
+                return dateString;
+            }
         }
 
         // Update display
@@ -1005,21 +1029,38 @@
             }
 
             container.innerHTML = '<div class="badge-grid">' +
-                badges.map(badge => `
-                    <div class="badge-card" onclick="openBadgeDetails('${badge.id}')">
-                        ${badge.hasImage ? `<img src="${API_BASE}/badges/${badge.id}/image" alt="${badge.badgeName}" class="badge-image">` : ''}
-                        <div class="badge-name">${badge.badgeName || 'Unnamed Badge'}</div>
-                        <div class="badge-info">
-                            <strong>Issuer:</strong> ${badge.issuerName || badge.issuerUrl || 'Unknown'}<br>
-                            <strong>Provider:</strong> ${badge.credentialProvider}<br>
-                            <strong>Version:</strong> OB ${badge.version}
+                badges.map(badge => {
+                    let datesHtml = '';
+                    const issuedDate = formatDate(badge.issuanceDate);
+                    const expiresDate = formatDate(badge.expiresDate);
+                    
+                    if (issuedDate || expiresDate) {
+                        datesHtml = '<div class="badge-dates">';
+                        if (issuedDate) {
+                            datesHtml += `<div class="date-item">📅 Issued: ${issuedDate}</div>`;
+                        }
+                        if (expiresDate) {
+                            datesHtml += `<div class="date-item">⏰ Expires: ${expiresDate}</div>`;
+                        }
+                        datesHtml += '</div>';
+                    }
+
+                    return `
+                        <div class="badge-card" onclick="openBadgeDetails('${badge.id}')">
+                            ${badge.hasImage ? `<img src="${API_BASE}/badges/${badge.id}/image" alt="${badge.badgeName}" class="badge-image">` : ''}
+                            <div class="badge-name">${badge.badgeName || 'Unnamed Badge'}</div>
+                            <div class="badge-info">
+                                <strong>Issuer:</strong> ${badge.issuerName || badge.issuerUrl || 'Unknown'}<br>
+                                <strong>Provider:</strong> ${badge.credentialProvider}
+                            </div>
+                            ${datesHtml}
+                            <div class="badge-tags">
+                                <span class="tag issuer">${badge.issuerName || badge.issuerUrl || 'Unknown'}</span>
+                                <span class="tag provider">${badge.credentialProvider}</span>
+                            </div>
                         </div>
-                        <div class="badge-tags">
-                            <span class="tag issuer">${badge.issuerName || badge.issuerUrl || 'Unknown'}</span>
-                            <span class="tag provider">${badge.credentialProvider}</span>
-                        </div>
-                    </div>
-                `).join('') +
+                    `;
+                }).join('') +
             '</div>';
         }
 
@@ -1068,15 +1109,19 @@
                             <div style="font-size: 15px; margin-top: 4px;">${badge.credentialProvider}</div>
                         </div>
 
-                        <div style="margin-bottom: 16px;">
-                            <strong style="font-size: 14px; color: var(--color-text-secondary);">OpenBadges Version</strong>
-                            <div style="font-size: 15px; margin-top: 4px;">${badge.version}</div>
-                        </div>
-
+                        ${badge.issuanceDate ? `
                         <div style="margin-bottom: 16px;">
                             <strong style="font-size: 14px; color: var(--color-text-secondary);">Issuance Date</strong>
-                            <div style="font-size: 15px; margin-top: 4px;">${badge.issuanceDate || 'N/A'}</div>
+                            <div style="font-size: 15px; margin-top: 4px;">${formatDate(badge.issuanceDate) || badge.issuanceDate}</div>
                         </div>
+                        ` : ''}
+
+                        ${badge.expiresDate ? `
+                        <div style="margin-bottom: 16px;">
+                            <strong style="font-size: 14px; color: var(--color-text-secondary);">Expiration Date</strong>
+                            <div style="font-size: 15px; margin-top: 4px;">${formatDate(badge.expiresDate) || badge.expiresDate}</div>
+                        </div>
+                        ` : ''}
 
                         <div style="margin-bottom: 20px;">
                             <strong style="font-size: 14px; color: var(--color-text-secondary);">Raw JSON Data</strong>
