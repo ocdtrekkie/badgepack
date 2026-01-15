@@ -974,7 +974,7 @@
                 issuerEmail: data.issuer?.email || null,
                 credentialProvider: detectProvider(data),
                 issuanceDate: data.validFrom || data.issuanceDate || null,
-                expiresDate: data.validTo || data.expirationDate || null,
+                expiresDate: data.validUntil || data.expirationDate || null,
                 recipientIdentity: data.credentialSubject?.id || null,
                 rawData: data
             };
