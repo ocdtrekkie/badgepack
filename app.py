@@ -2,6 +2,10 @@ from flask import Flask, render_template, request, jsonify, send_file
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
+from werkzeug.middleware.proxy_fix import ProxyFix
+from werkzeug.serving import WSGIRequestHandler
+import httpx
+import asyncio
 import os
 import json
 import hashlib
@@ -9,6 +13,7 @@ from io import BytesIO
 import requests
 from urllib.parse import urljoin
 import certifi
+from flask_socketio import SocketIO, emit
 
 # Initialize Flask app
 instance_path = '/var'
@@ -95,59 +100,56 @@ def serve_frontend():
 
 # ===== POWERBOX PROXY ROUTES =====
 
-@app.route('/_sandstorm/websocket', methods=['GET', 'POST', 'OPTIONS'])
-@app.route('/_sandstorm/websocket/<path:path>', methods=['GET', 'POST', 'OPTIONS'])
-def proxy_websocket(path=''):
-    """Proxy requests to powerbox-http-proxy daemon on port 3000"""
-    try:
-        # Handle OPTIONS requests (CORS preflight)
-        if request.method == 'OPTIONS':
-            return '', 204
-        
-        # Build target URL
-        target_url = f'http://127.0.0.1:{POWERBOX_WEBSOCKET_PORT}/'
-        if path:
-            target_url += path
-        
-        # Add query string if present
-        if request.query_string:
-            target_url += '?' + request.query_string.decode('utf-8')
-        
-        print(f"Proxying {request.method} request to: {target_url}")
-        
-        # For WebSocket upgrade requests
-        if request.headers.get('Upgrade', '').lower() == 'websocket':
-            # WebSocket upgrades should work with the JavaScript client
-            print("WebSocket upgrade detected - client should handle directly")
-            return '', 101  # Switching Protocols
-        
-        # Regular HTTP proxy
-        headers = {key: value for key, value in request.headers if key.lower() not in ['host', 'connection', 'content-length']}
-        
-        response = requests.request(
-            method=request.method,
-            url=target_url,
-            headers=headers,
-            data=request.get_data(),
-            cookies=request.cookies,
-            timeout=30,
-            allow_redirects=False,
-            verify=False  # Powerbox uses self-signed certs, verify in production with CA_CERT_PATH
-        )
-        
-        print(f"Response status: {response.status_code}")
-        
-        # Return proxied response
-        excluded_headers = ['content-encoding', 'content-length', 'transfer-encoding', 'connection']
-        headers = {key: value for key, value in response.headers.items() if key.lower() not in excluded_headers}
-        
-        return response.content, response.status_code, headers
+# Important: Handle proxy headers from Sandstorm/reverse proxy
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
+
+# For synchronous HTTP proxying (non-WebSocket)
+@app.route('/_sandstorm/websocket', methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH'])
+def proxy_websocket():
+    """
+    Proxy HTTP requests to upstream server at 127.0.0.1:3000
+    For actual WebSocket connections, use the async version below
+    """
+    upstream_url = f"http://127.0.0.1:3000{request.path}"
     
+    headers = {
+        'Host': request.host,
+        'Upgrade': request.headers.get('Upgrade', ''),
+        'Connection': request.headers.get('Connection', ''),
+    }
+    
+    # Copy other relevant headers
+    for key, value in request.headers:
+        if key.lower() not in ['host', 'connection', 'content-length']:
+            headers[key] = value
+    
+    try:
+        if request.method == 'GET':
+            response = httpx.get(upstream_url, headers=headers, stream=True)
+        else:
+            response = httpx.request(
+                request.method,
+                upstream_url,
+                headers=headers,
+                content=request.get_data(),
+                stream=True
+            )
+        
+        return response.content, response.status_code, dict(response.headers)
     except Exception as e:
-        print(f"Websocket proxy error: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
+        return {'error': str(e)}, 502
+
+socketio = SocketIO(app, cors_allowed_origins="*")
+
+@socketio.on('connect', namespace='/_sandstorm/websocket')
+def handle_connect():
+    """Handle WebSocket connections"""
+    emit('response', {'data': 'Connected to proxy'})
+
+@socketio.on('message', namespace='/_sandstorm/websocket')
+def handle_message(data):
+    """Relay messages to upstream server"""
+    emit('response', {'data': data}, broadcast=True)
         
 def _proxy_http_request(target_url):
     """Proxy regular HTTP request to powerbox daemon"""
@@ -476,4 +478,4 @@ def internal_error(error):
     return jsonify({'error': 'Internal server error'}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    socketio.run(app, host='127.0.0.1', port=5000, debug=True, allow_unsafe_werkzeug=True)
