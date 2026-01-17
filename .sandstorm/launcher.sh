@@ -54,7 +54,6 @@ HOME=/var uwsgi \
         --threads 2 \
         --processes 2 \
         --post-buffering 16777216 \
-        --buffer-size 65535 \
         --single-interpreter \
         --callable app &
 
