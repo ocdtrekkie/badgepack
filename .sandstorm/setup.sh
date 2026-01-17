@@ -6,7 +6,7 @@
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
-apt-get install -y build-essential python3-dev python3-pip python3-venv pipenv sqlite3 git
+apt-get install -y build-essential python3-dev python3-pip python3-venv pipenv sqlite3 git nginx libssl-dev pkg-config uwsgi uwsgi-plugin-python3
 
 # The version of golang in the debian repositories tends to be incredibly
 # out of date; let's get ourselves a newer version from upstream:
@@ -26,5 +26,8 @@ echo 'export PATH=/usr/local/go/bin:$PATH' > /etc/profile.d/go.sh
 
 cd /opt && git clone https://github.com/sandstorm-org/powerbox-http-proxy
 cd /opt/powerbox-http-proxy && /usr/local/go/bin/go build
+
+service nginx stop
+systemctl disable nginx
 
 exit 0
