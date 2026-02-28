@@ -53,7 +53,9 @@ HOME=/var uwsgi \
         --enable-threads \
         --threads 2 \
         --processes 2 \
-        --post-buffering 16777216 \
+        --post-buffering 65536 \
+        --limit-post 10485760 \
+        --buffer-size 65535 \
         --single-interpreter \
         --callable app &
 

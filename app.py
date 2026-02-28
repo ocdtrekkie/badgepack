@@ -228,6 +228,10 @@ def get_badge_image(badge_id):
 def upload_badge():
     """Upload new badge with image"""
     try:
+        app.logger.warning("Content-Type: %s", request.content_type)
+        app.logger.warning("Form keys: %s", list(request.form.keys()))
+        app.logger.warning("Files keys: %s", list(request.files.keys()))
+        
         # Parse badge data
         badge_data_str = request.form.get('badgeData')
         if not badge_data_str:
