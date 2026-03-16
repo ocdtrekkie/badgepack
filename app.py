@@ -9,6 +9,7 @@ from io import BytesIO
 import requests
 from urllib.parse import urljoin
 import certifi
+import base64
 
 # Initialize Flask app
 instance_path = '/var'
@@ -229,31 +230,36 @@ def upload_badge():
     """Upload new badge with image"""
     try:
         app.logger.warning("Content-Type: %s", request.content_type)
-        app.logger.warning("Form keys: %s", list(request.form.keys()))
-        app.logger.warning("Files keys: %s", list(request.files.keys()))
-        
-        # Parse badge data
-        badge_data_str = request.form.get('badgeData')
-        if not badge_data_str:
+        raw_body = request.get_data(cache=True, as_text=False)
+        app.logger.warning("Raw body length: %s", len(raw_body) if raw_body is not None else None)
+
+        try:
+            data = json.loads(raw_body.decode('utf-8'))
+        except Exception as e:
+            app.logger.warning("JSON decode failed: %s", e)
+            app.logger.warning("Raw body preview: %r", raw_body[:200] if raw_body else raw_body)
+            return jsonify({'error': f'Invalid JSON body: {e}'}), 400
+
+        if not isinstance(data, dict):
+            return jsonify({'error': 'JSON body must be an object'}), 400
+
+        app.logger.warning("JSON keys: %s", list(data.keys()))
+
+        badge_data = data.get('badgeData')
+        if not badge_data:
+            app.logger.warning("Parsed JSON preview: %r", data)
             return jsonify({'error': 'Missing badgeData'}), 400
-        
-        badge_data = json.loads(badge_data_str)
-        
-        # Get file if provided
+
         image_data = None
         image_mime_type = None
         image_hash = None
-        
-        if 'file' in request.files:
-            file = request.files['file']
-            if file and file.filename:
-                image_data = file.read()
-                image_mime_type = file.content_type or 'image/png'
-                
-                # Calculate hash for deduplication
-                image_hash = hashlib.sha256(image_data).hexdigest()
-        
-        # Create badge record
+
+        file_data_base64 = data.get('fileDataBase64')
+        if file_data_base64:
+            image_data = base64.b64decode(file_data_base64)
+            image_mime_type = data.get('fileType') or 'image/png'
+            image_hash = hashlib.sha256(image_data).hexdigest()
+
         badge = Badge(
             id=badge_data.get('id'),
             version=badge_data.get('version'),
@@ -272,12 +278,12 @@ def upload_badge():
             image_hash=image_hash,
             image_mime_type=image_mime_type
         )
-        
+
         db.session.add(badge)
         db.session.commit()
-        
+
         return jsonify(badge.to_dict()), 201
-    
+
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 400

@@ -599,6 +599,19 @@
             }
         }
 
+        function arrayBufferToBase64(buffer) {
+            const bytes = new Uint8Array(buffer);
+            const chunkSize = 0x8000;
+            let binary = '';
+
+            for (let i = 0; i < bytes.length; i += chunkSize) {
+                const chunk = bytes.subarray(i, i + chunkSize);
+                binary += String.fromCharCode(...chunk);
+            }
+
+            return btoa(binary);
+        }
+
         // Upload credentials
         async function uploadCredentials() {
             const fileInput = document.getElementById('credentialFile');
@@ -623,13 +636,17 @@
                         }
 
                         try {
-                            const formData = new FormData();
-                            formData.append('badgeData', JSON.stringify(badgeData));
-                            formData.append('file', file);
+                            const fileBuffer = await file.arrayBuffer();
 
                             const response = await fetch(`${API_BASE}/badges`, {
                                 method: 'POST',
-                                body: formData
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    badgeData,
+                                    fileName: file.name,
+                                    fileType: file.type || 'image/png',
+                                    fileDataBase64: arrayBufferToBase64(fileBuffer)
+                                })
                             });
 
                             if (response.ok) {
@@ -727,16 +744,36 @@
                         let badgeText = null;
 
                         if (chunkType === 'iTXt') {
-                            if (keywordEnd + 2 <= chunkDataEnd) {
+                            if (keywordEnd + 5 <= chunkDataEnd) {
                                 const compressionFlag = view[keywordEnd + 1];
-                                const dataStart = keywordEnd + 2;
-                                const data = view.slice(dataStart, chunkDataEnd);
+                                const compressionMethod = view[keywordEnd + 2];
+
+                                let pos = keywordEnd + 3;
+
+                                // Skip language tag (null-terminated)
+                                while (pos < chunkDataEnd && view[pos] !== 0) pos++;
+                                if (pos >= chunkDataEnd) {
+                                    offset = chunkDataEnd + 4;
+                                    continue;
+                                }
+                                pos++;
+
+                                // Skip translated keyword (null-terminated)
+                                while (pos < chunkDataEnd && view[pos] !== 0) pos++;
+                                if (pos >= chunkDataEnd) {
+                                    offset = chunkDataEnd + 4;
+                                    continue;
+                                }
+                                pos++;
+
+                                const data = view.slice(pos, chunkDataEnd);
 
                                 if (compressionFlag === 1) {
                                     try {
                                         badgeText = pako.inflate(data, { to: 'string' });
                                     } catch (e) {
-                                        badgeText = new TextDecoder('utf-8', { fatal: false }).decode(data);
+                                        console.warn('Error inflating iTXt chunk:', e);
+                                        badgeText = null;
                                     }
                                 } else {
                                     badgeText = new TextDecoder('utf-8', { fatal: false }).decode(data);
@@ -821,11 +858,7 @@
             let text;
 
             if (textOrBytes instanceof Uint8Array) {
-                try {
-                    text = new TextDecoder('utf-8', { fatal: false }).decode(textOrBytes);
-                } catch (e) {
-                    text = Array.from(textOrBytes).map(byte => String.fromCharCode(byte)).join('');
-                }
+                text = new TextDecoder('utf-8', { fatal: false }).decode(textOrBytes);
             } else if (typeof textOrBytes === 'string') {
                 text = textOrBytes;
             } else {
