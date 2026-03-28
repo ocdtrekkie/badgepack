@@ -529,37 +529,6 @@
     <script src="https://cdn.jsdelivr.net/npm/pako@2/dist/pako.min.js"></script>
 
     <script>
-	
-        function getWebSocketUrl() {
-            const protocol = window.location.protocol.replace('http', 'ws');
-            return protocol + "//" + window.location.host + "/_sandstorm/websocket";
-        }
-
-        function connectWebSocket() {
-            console.log("Connecting to websocket.")
-            const socket = new WebSocket(getWebSocketUrl());
-            socket.onmessage = (event) => {
-            console.log("Got message from server: ", event.data)
-            window.parent.postMessage(JSON.parse(event.data), '*');
-        }
-        socket.onclose = () => {
-            // Short delay before re-trying, so we don't overload the server.
-            // TODO: expontential backoff.
-            // TODO: do something to avoid thrashing between more than one client.
-            console.log("Disconnected; re-trying in 500ms");
-            setTimeout(connectWebSocket, 500);
-        }
-        window.addEventListener('message', (event) => {
-            if(event.source !== window.parent) {
-                return;
-            }
-            console.log("Got message parent frame: ", event.data)
-            socket.send(JSON.stringify(event.data));
-            });
-        }
-
-        connectWebSocket();
-
         // Configuration
         const API_BASE = '/api';
         let selectedBadgeId = null;
@@ -599,19 +568,6 @@
             }
         }
 
-        function arrayBufferToBase64(buffer) {
-            const bytes = new Uint8Array(buffer);
-            const chunkSize = 0x8000;
-            let binary = '';
-
-            for (let i = 0; i < bytes.length; i += chunkSize) {
-                const chunk = bytes.subarray(i, i + chunkSize);
-                binary += String.fromCharCode(...chunk);
-            }
-
-            return btoa(binary);
-        }
-
         // Upload credentials
         async function uploadCredentials() {
             const fileInput = document.getElementById('credentialFile');
@@ -636,17 +592,13 @@
                         }
 
                         try {
-                            const fileBuffer = await file.arrayBuffer();
+                            const formData = new FormData();
+                            formData.append('badgeData', JSON.stringify(badgeData));
+                            formData.append('file', file);
 
                             const response = await fetch(`${API_BASE}/badges`, {
                                 method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                    badgeData,
-                                    fileName: file.name,
-                                    fileType: file.type || 'image/png',
-                                    fileDataBase64: arrayBufferToBase64(fileBuffer)
-                                })
+                                body: formData
                             });
 
                             if (response.ok) {
@@ -744,36 +696,16 @@
                         let badgeText = null;
 
                         if (chunkType === 'iTXt') {
-                            if (keywordEnd + 5 <= chunkDataEnd) {
+                            if (keywordEnd + 2 <= chunkDataEnd) {
                                 const compressionFlag = view[keywordEnd + 1];
-                                const compressionMethod = view[keywordEnd + 2];
-
-                                let pos = keywordEnd + 3;
-
-                                // Skip language tag (null-terminated)
-                                while (pos < chunkDataEnd && view[pos] !== 0) pos++;
-                                if (pos >= chunkDataEnd) {
-                                    offset = chunkDataEnd + 4;
-                                    continue;
-                                }
-                                pos++;
-
-                                // Skip translated keyword (null-terminated)
-                                while (pos < chunkDataEnd && view[pos] !== 0) pos++;
-                                if (pos >= chunkDataEnd) {
-                                    offset = chunkDataEnd + 4;
-                                    continue;
-                                }
-                                pos++;
-
-                                const data = view.slice(pos, chunkDataEnd);
+                                const dataStart = keywordEnd + 2;
+                                const data = view.slice(dataStart, chunkDataEnd);
 
                                 if (compressionFlag === 1) {
                                     try {
                                         badgeText = pako.inflate(data, { to: 'string' });
                                     } catch (e) {
-                                        console.warn('Error inflating iTXt chunk:', e);
-                                        badgeText = null;
+                                        badgeText = new TextDecoder('utf-8', { fatal: false }).decode(data);
                                     }
                                 } else {
                                     badgeText = new TextDecoder('utf-8', { fatal: false }).decode(data);
@@ -858,7 +790,11 @@
             let text;
 
             if (textOrBytes instanceof Uint8Array) {
-                text = new TextDecoder('utf-8', { fatal: false }).decode(textOrBytes);
+                try {
+                    text = new TextDecoder('utf-8', { fatal: false }).decode(textOrBytes);
+                } catch (e) {
+                    text = Array.from(textOrBytes).map(byte => String.fromCharCode(byte)).join('');
+                }
             } else if (typeof textOrBytes === 'string') {
                 text = textOrBytes;
             } else {
@@ -896,47 +832,33 @@
             }
         }
 
-        // Fetch remote data
-        async function fetchRemoteData(url) {
-            if (!url || typeof url !== 'string') return null;
-
-            try {
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 5000);
-
-                const response = await fetch(`${API_BASE}/fetch-remote`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ url })
-                });
-
-                clearTimeout(timeoutId);
-
-                if (response.ok) {
-                    return await response.json();
-                }
-            } catch (error) {
-                console.warn('Error fetching remote data from', url, ':', error);
-            }
-            return null;
-        }
-
-        // Process badge data - enriches with remote data if available
+        // Process badge data
         async function processBadgeData(data) {
             if (!data || typeof data !== 'object') return null;
+
+            if (data._badgeUrl) {
+                const remoteData = await fetchRemoteData(data._badgeUrl);
+                if (!remoteData) return null;
+                data = remoteData;
+            }
 
             try {
                 let badge;
 
-                // Detect if this is OB3 or OB2
-                const isOB3 = data['@context'] && (Array.isArray(data.type) ? 
-                    data.type.includes('VerifiableCredential') || data.type.includes('AchievementCredential') : 
-                    (data.type && (data.type.includes('VerifiableCredential') || data.type.includes('AchievementCredential'))));
-
-                if (isOB3) {
-                    badge = await parseOB3(data);
+                if (data['@context']) {
+                    const types = Array.isArray(data.type) ? data.type : (data.type ? [data.type] : []);
+                    if (types.includes('VerifiableCredential') || types.includes('AchievementCredential') ||
+                        (data['@context'] && (Array.isArray(data['@context']) ?
+                         data['@context'].some(ctx => typeof ctx === 'string' && ctx.includes('openbadges')) :
+                         typeof data['@context'] === 'string' && data['@context'].includes('openbadges')))) {
+                        badge = parseOB3(data);
+                    } else {
+                        badge = parseOB2(data);
+                    }
+                } else if (data.badge || data.recipient) {
+                    badge = parseOB2(data);
                 } else {
-                    badge = await parseOB2(data);
+                    return null;
                 }
 
                 return badge;
@@ -946,56 +868,27 @@
             }
         }
 
-        // Parse OB2 - with remote data fetching
-        async function parseOB2(data) {
-            let badgeClassData = null;
-            let issuanceDate = data.issuedOn || null;
-            let expiresDate = data.expires || null;
-
-            // Try to fetch remote badge class if badge is a URL
-            if (data.badge && typeof data.badge === 'string') {
-                badgeClassData = await fetchRemoteData(data.badge);
-                console.log('Fetched BadgeClass from:', data.badge, badgeClassData);
-            } else if (data.badge && typeof data.badge === 'object') {
-                badgeClassData = data.badge;
-            }
-
-            // Try to fetch from verify.url if no direct date found
-            if (!issuanceDate && !expiresDate && data.verify?.url) {
-                const assertionData = await fetchRemoteData(data.verify.url);
-                if (assertionData) {
-                    issuanceDate = issuanceDate || assertionData.issuedOn || null;
-                    expiresDate = expiresDate || assertionData.expires || null;
-                }
-            }
-
-            // Extract badge name and description from BadgeClass
-            let badgeName = null;
-            let description = null;
-            if (badgeClassData) {
-                badgeName = badgeClassData.name || null;
-                description = badgeClassData.description || null;
-            }
-
+        // Parse OB2
+        function parseOB2(data) {
             return {
                 id: 'badge_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
                 version: '2.0',
                 type: data.type || 'Unknown',
-                badgeName: badgeName || data.badge?.name || null,
-                description: description || data.badge?.description || null,
-                issuerName: data.badge?.issuer?.name || data.issuer?.name || null,
-                issuerUrl: data.badge?.issuer?.url || data.issuer?.url || null,
-                issuerEmail: data.badge?.issuer?.email || data.issuer?.email || null,
+                badgeName: data.badge?.name || null,
+                description: data.badge?.description || null,
+                issuerName: data.badge?.issuer?.name || null,
+                issuerUrl: data.badge?.issuer?.url || null,
+                issuerEmail: data.badge?.issuer?.email || null,
                 credentialProvider: detectProvider(data),
-                issuanceDate: issuanceDate,
-                expiresDate: expiresDate,
+                issuanceDate: data.issuedOn || null,
+                expiresDate: data.expires || null,
                 recipientIdentity: typeof data.recipient === 'object' ? data.recipient.identity : data.recipient,
                 rawData: data
             };
         }
 
-        // Parse OB3 - with remote data fetching
-        async function parseOB3(data) {
+        // Parse OB3
+        function parseOB3(data) {
             return {
                 id: 'badge_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
                 version: '3.0',
@@ -1023,12 +916,36 @@
             return 'Unknown';
         }
 
+        // Fetch remote data
+        async function fetchRemoteData(url) {
+            if (!url || typeof url !== 'string') return null;
+
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+                const response = await fetch(url, {
+                    mode: 'cors',
+                    headers: { 'Accept': 'application/json' },
+                    signal: controller.signal
+                });
+
+                clearTimeout(timeoutId);
+
+                if (response.ok) {
+                    return await response.json();
+                }
+            } catch (error) {
+                console.warn('Error fetching remote data:', error);
+            }
+            return null;
+        }
+
         // Format date for display
         function formatDate(dateString) {
             if (!dateString) return null;
             try {
                 const date = new Date(dateString);
-                if (isNaN(date.getTime())) return dateString;
                 return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
             } catch (e) {
                 return dateString;

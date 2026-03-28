@@ -6,10 +6,6 @@ import os
 import json
 import hashlib
 from io import BytesIO
-import requests
-from urllib.parse import urljoin
-import certifi
-import base64
 
 # Initialize Flask app
 instance_path = '/var'
@@ -23,20 +19,6 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['MAX_CONTENT_LENGTH'] = 52428800  # 50MB max file size
 
 db = SQLAlchemy(app)
-
-# Powerbox HTTP Proxy configuration
-POWERBOX_PROXY_PORT = os.environ.get('POWERBOX_PROXY_PORT', '4000')
-POWERBOX_WEBSOCKET_PORT = os.environ.get('POWERBOX_WEBSOCKET_PORT', '3000')
-CA_CERT_PATH = os.environ.get('CA_CERT_PATH', '/tmp/ca.crt')
-
-# Configure requests to use powerbox proxy and trust its CA cert
-def setup_proxy():
-    """Configure requests library to use powerbox-http-proxy"""
-    if os.path.exists(CA_CERT_PATH):
-        os.environ['REQUESTS_CA_BUNDLE'] = CA_CERT_PATH
-        os.environ['CURL_CA_BUNDLE'] = CA_CERT_PATH
-
-setup_proxy()
 
 # Database Model
 class Badge(db.Model):
@@ -94,108 +76,12 @@ def serve_frontend():
     """Serve the main frontend HTML"""
     return render_template('index.html')
 
-# ===== POWERBOX PROXY ROUTES =====
-        
-def _proxy_http_request(target_url):
-    """Proxy regular HTTP request to powerbox daemon"""
-    try:
-        headers = {key: value for key, value in request.headers if key.lower() not in ['host', 'connection']}
-        
-        response = requests.request(
-            method=request.method,
-            url=target_url,
-            headers=headers,
-            data=request.get_data(),
-            cookies=request.cookies,
-            verify=CA_CERT_PATH if os.path.exists(CA_CERT_PATH) else True,
-            timeout=30,
-            allow_redirects=False
-        )
-        
-        # Return proxied response
-        excluded_headers = ['content-encoding', 'content-length', 'transfer-encoding', 'connection']
-        headers = {key: value for key, value in response.headers.items() if key.lower() not in excluded_headers}
-        
-        return response.content, response.status_code, headers
-    
-    except Exception as e:
-        print(f"HTTP proxy error: {e}")
-        return jsonify({'error': str(e)}), 500
-
-def _proxy_websocket_upgrade(target_url):
-    """Handle WebSocket upgrade requests (pass through headers)"""
-    # Note: True WebSocket proxying requires special handling. 
-    # For now, return that WebSocket is being proxied.
-    print(f"WebSocket upgrade requested to {target_url}")
-    return jsonify({'message': 'WebSocket proxying configured'}), 200
-
-# ===== UTILITY ROUTES =====
-
-@app.route('/api/fetch-remote', methods=['POST'])
-def fetch_remote():
-    """Proxy endpoint for fetching remote badge data with CORS support"""
-    try:
-        data = request.json
-        url = data.get('url')
-        
-        if not url:
-            return jsonify({'error': 'Missing URL'}), 400
-        
-        # Validate URL
-        if not isinstance(url, str) or not (url.startswith('http://') or url.startswith('https://')):
-            return jsonify({'error': 'Invalid URL'}), 400
-        
-        # Use powerbox proxy if POWERBOX_PROXY_PORT is set
-        proxies = None
-        if POWERBOX_PROXY_PORT:
-            proxy_url = f'http://127.0.0.1:{POWERBOX_PROXY_PORT}'
-            proxies = {
-                'http': proxy_url,
-                'https': proxy_url
-            }
-        
-        # Fetch with timeout
-        verify_cert = CA_CERT_PATH if os.path.exists(CA_CERT_PATH) else True
-        response = requests.get(
-            url, 
-            timeout=5, 
-            headers={'Accept': 'application/json'},
-            proxies=proxies,
-            verify=verify_cert
-        )
-        
-        if response.status_code == 200:
-            return jsonify({'data': response.json()}), 200
-        else:
-            return jsonify({'error': f'Remote server returned {response.status_code}'}), response.status_code
-    
-    except requests.exceptions.Timeout:
-        return jsonify({'error': 'Request timeout'}), 504
-    except requests.exceptions.RequestException as e:
-        return jsonify({'error': str(e)}), 400
-    except json.JSONDecodeError:
-        return jsonify({'error': 'Invalid JSON response'}), 400
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
 # ===== API ROUTES =====
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""
-    powerbox_status = 'not configured'
-    if POWERBOX_PROXY_PORT:
-        try:
-            requests.get(f'http://127.0.0.1:{POWERBOX_PROXY_PORT}', timeout=1)
-            powerbox_status = 'connected'
-        except:
-            powerbox_status = 'disconnected'
-    
-    return jsonify({
-        'status': 'healthy', 
-        'message': 'Backend is running',
-        'powerbox': powerbox_status
-    }), 200
+    return jsonify({'status': 'healthy', 'message': 'Backend is running'}), 200
 
 @app.route('/api/badges', methods=['GET'])
 def get_all_badges():
@@ -229,37 +115,28 @@ def get_badge_image(badge_id):
 def upload_badge():
     """Upload new badge with image"""
     try:
-        app.logger.warning("Content-Type: %s", request.content_type)
-        raw_body = request.get_data(cache=True, as_text=False)
-        app.logger.warning("Raw body length: %s", len(raw_body) if raw_body is not None else None)
-
-        try:
-            data = json.loads(raw_body.decode('utf-8'))
-        except Exception as e:
-            app.logger.warning("JSON decode failed: %s", e)
-            app.logger.warning("Raw body preview: %r", raw_body[:200] if raw_body else raw_body)
-            return jsonify({'error': f'Invalid JSON body: {e}'}), 400
-
-        if not isinstance(data, dict):
-            return jsonify({'error': 'JSON body must be an object'}), 400
-
-        app.logger.warning("JSON keys: %s", list(data.keys()))
-
-        badge_data = data.get('badgeData')
-        if not badge_data:
-            app.logger.warning("Parsed JSON preview: %r", data)
+        # Parse badge data
+        badge_data_str = request.form.get('badgeData')
+        if not badge_data_str:
             return jsonify({'error': 'Missing badgeData'}), 400
-
+        
+        badge_data = json.loads(badge_data_str)
+        
+        # Get file if provided
         image_data = None
         image_mime_type = None
         image_hash = None
-
-        file_data_base64 = data.get('fileDataBase64')
-        if file_data_base64:
-            image_data = base64.b64decode(file_data_base64)
-            image_mime_type = data.get('fileType') or 'image/png'
-            image_hash = hashlib.sha256(image_data).hexdigest()
-
+        
+        if 'file' in request.files:
+            file = request.files['file']
+            if file and file.filename:
+                image_data = file.read()
+                image_mime_type = file.content_type or 'image/png'
+                
+                # Calculate hash for deduplication
+                image_hash = hashlib.sha256(image_data).hexdigest()
+        
+        # Create badge record
         badge = Badge(
             id=badge_data.get('id'),
             version=badge_data.get('version'),
@@ -278,12 +155,12 @@ def upload_badge():
             image_hash=image_hash,
             image_mime_type=image_mime_type
         )
-
+        
         db.session.add(badge)
         db.session.commit()
-
+        
         return jsonify(badge.to_dict()), 201
-
+    
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 400
@@ -432,5 +309,4 @@ def internal_error(error):
     return jsonify({'error': 'Internal server error'}), 500
 
 if __name__ == '__main__':
-    # This block only runs if executed directly (not through uWSGI)
-    app.run(debug=False, host='0.0.0.0', port=5000)
+    app.run(debug=True, host='0.0.0.0', port=5000)
