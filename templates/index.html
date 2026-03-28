@@ -909,10 +909,10 @@
         // Detect provider
         function detectProvider(data) {
             const rawStr = JSON.stringify(data).toLowerCase();
-            if (rawStr.includes('linkedin')) return 'LinkedIn';
-            if (rawStr.includes('credly')) return 'Credly';
+            if (rawStr.includes('did:web:www.credly.com')) return 'Credly';
             if (rawStr.includes('badgr')) return 'Badgr';
             if (rawStr.includes('mozilla')) return 'Mozilla';
+            if (rawStr.includes('linkedin')) return 'LinkedIn';
             return 'Unknown';
         }
 
