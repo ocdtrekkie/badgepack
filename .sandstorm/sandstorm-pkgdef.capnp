@@ -21,7 +21,7 @@ const pkgdef :Spk.PackageDefinition = (
 
     appVersion = 0,  # Increment this for every release.
 
-    appMarketingVersion = (defaultText = "0.0.0"),
+    appMarketingVersion = (defaultText = "0.0.1"),
     # Human-readable representation of appVersion. Should match the way you
     # identify versions of your app in documentation and marketing.
 
@@ -41,11 +41,6 @@ const pkgdef :Spk.PackageDefinition = (
     # case.
 
     metadata = (
-      # Data which is not needed specifically to execute the app, but is useful
-      # for purposes like marketing and display.  These fields are documented at
-      # https://docs.sandstorm.io/en/latest/developing/publishing-apps/#add-required-metadata
-      # and (in deeper detail) in the sandstorm source code, in the Metadata section of
-      # https://github.com/sandstorm-io/sandstorm/blob/master/src/sandstorm/package.capnp
       icons = (
         appGrid = (png = (dpi1x = embed "../icons/badgepack-icon.png")),
         grain = (png = (dpi1x = embed "../icons/star-icon.png")),
@@ -53,64 +48,25 @@ const pkgdef :Spk.PackageDefinition = (
         marketBig = (png = (dpi1x = embed "../icons/badgepack-icon.png")),
       ),
 
-      website = "http://example.com",
-      # This should be the app's main website url.
+      website = "http://github.com/ocdtrekkie/badgepack",
 
-      codeUrl = "http://example.com",
-      # URL of the app's source code repository, e.g. a GitHub URL.
-      # Required if you specify a license requiring redistributing code, but optional otherwise.
+      codeUrl = "http://github.com/ocdtrekkie/badgepack",
 
-      license = (none = void),
-      # The license this package is distributed under.  See
-      # https://docs.sandstorm.io/en/latest/developing/publishing-apps/#license
+      license = (openSource = mit),
 
-      categories = [],
-      # A list of categories/genres to which this app belongs, sorted with best fit first.
-      # See the list of categories at
-      # https://docs.sandstorm.io/en/latest/developing/publishing-apps/#categories
+      categories = [other],
 
       author = (
-        # Fields relating to the author of this app.
+        contactEmail = "inbox@jacobweisz.com",
 
-        contactEmail = "youremail@example.com",
-        # Email address to contact for any issues with this app. This includes end-user support
-        # requests as well as app store administrator requests, so it is very important that this be a
-        # valid address with someone paying attention to it.
-
-        #pgpSignature = embed "path/to/pgp-signature",
-        # PGP signature attesting responsibility for the app ID. This is a binary-format detached
-        # signature of the following ASCII message (not including the quotes, no newlines, and
-        # replacing <app-id> with the standard base-32 text format of the app's ID):
-        #
-        # "I am the author of the Sandstorm.io app with the following ID: <app-id>"
-        #
-        # You can create a signature file using `gpg` like so:
-        #
-        #     echo -n "I am the author of the Sandstorm.io app with the following ID: <app-id>" | gpg --sign > pgp-signature
-        #
-        # Further details including how to set up GPG and how to use keybase.io can be found
-        # at https://docs.sandstorm.io/en/latest/developing/publishing-apps/#verify-your-identity
+        pgpSignature = embed "pgp-signature",
       ),
 
-      #pgpKeyring = embed "path/to/pgp-keyring",
-      # A keyring in GPG keyring format containing all public keys needed to verify PGP signatures in
-      # this manifest (as of this writing, there is only one: `author.pgpSignature`).
-      #
-      # To generate a keyring containing just your public key, do:
-      #
-      #     gpg --export <key-id> > keyring
-      #
-      # Where `<key-id>` is a PGP key ID or email address associated with the key.
+      pgpKeyring = embed "pgp-keyring",
 
-      #description = (defaultText = embed "path/to/description.md"),
-      # The app's description in Github-flavored Markdown format, to be displayed e.g.
-      # in an app store. Note that the Markdown is not permitted to contain HTML nor image tags (but
-      # you can include a list of screenshots separately).
+      description = (defaultText = embed "../README.md"),
 
       shortDescription = (defaultText = "Certification wallet"),
-      # A very short (one-to-three words) description of what the app does. For example,
-      # "Document editor", or "Notetaking", or "Email client". This will be displayed under the app
-      # title in the grid view in the app market.
 
       screenshots = [
         # Screenshots to use for marketing purposes.  Examples below.

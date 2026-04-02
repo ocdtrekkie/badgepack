@@ -310,6 +310,7 @@ opt/app/.sandstorm
 opt/app/.sandstorm/.vagrant
 opt/app/.sandstorm/launcher.sh
 opt/app/app.py
+opt/app/icons
 opt/app/templates
 opt/app/templates/index.html
 proc/cpuinfo
