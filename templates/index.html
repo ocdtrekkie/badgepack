@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="dark light">
     <title>Badgepack</title>
     <style>
         :root {
@@ -437,6 +438,72 @@
                 font-size: 22px;
             }
         }
+    
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --color-bg: #121212;
+                --color-surface: #1e1e1e;
+                --color-text: #e0e0e0;
+                --color-text-secondary: #b0b0b0;
+                --color-border: #333333;
+            }
+
+            body {
+                background-color: var(--color-bg);
+                color: var(--color-text);
+            }
+
+            header,
+            .card {
+                box-shadow: 0 2px 4px rgba(0,0,0,0.6);
+            }
+
+            input[type="file"],
+            input[type="text"],
+            select,
+            textarea {
+                background-color: #1e1e1e;
+                color: var(--color-text);
+                border-color: var(--color-border);
+            }
+
+            .badge-card {
+                background-color: #1e1e1e;
+                background: #1e1e1e;
+                border-color: var(--color-border);
+            }
+
+            .badge-card.selected {
+                background-color: rgba(33, 150, 243, 0.2);
+            }
+
+            .badge-image,
+            .modal-badge-image {
+                background: #121212;
+                border-color: var(--color-border);
+            }
+
+            .json-display {
+                background-color: #1e1e1e;
+                color: var(--color-text);
+                border-color: var(--color-border);
+            }
+
+            .empty-state,
+            .no-results,
+            .loading {
+                color: var(--color-text-secondary);
+            }
+
+            .modal {
+                background-color: rgba(0,0,0,0.7);
+            }
+
+            .modal-content {
+                box-shadow: 0 4px 20px rgba(0,0,0,0.8);
+            }
+        }
+
     </style>
 </head>
 <body>
