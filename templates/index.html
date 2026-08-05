@@ -592,13 +592,70 @@
         </div>
     </div>
 
-    <!-- Include pako for zlib decompression -->
+            <!-- Manual metadata modal -->
+        <div id="metadataModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <span class="modal-close" onclick="closeMetadataModal()">&times;</span>
+                    <span>Enter Badge Metadata</span>
+                </div>
+                <div id="metadataBody">
+                    <div class="form-group">
+                        <label for="metadataBadgeName">Badge Name</label>
+                        <input type="text" id="metadataBadgeName">
+                    </div>
+                    <div class="form-group">
+                        <label for="metadataDescription">Description</label>
+                        <textarea id="metadataDescription" rows="3"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="metadataIssuerName">Issuer Name</label>
+                        <input type="text" id="metadataIssuerName">
+                    </div>
+                    <div class="form-group">
+                        <label for="metadataIssuerUrl">Issuer URL</label>
+                        <input type="text" id="metadataIssuerUrl">
+                    </div>
+                    <div class="form-group">
+                        <label for="metadataIssuerEmail">Issuer Email</label>
+                        <input type="text" id="metadataIssuerEmail">
+                    </div>
+                    <div class="form-group">
+                        <label for="metadataProvider">Credential Provider</label>
+                        <input type="text" id="metadataProvider" placeholder="e.g., Credly, Badgr">
+                    </div>
+                    <div class="form-group">
+                        <label for="metadataIssuanceDate">Issuance Date</label>
+                        <input type="text" id="metadataIssuanceDate" placeholder="YYYY-MM-DD">
+                    </div>
+                    <div class="form-group">
+                        <label for="metadataExpiresDate">Expiration Date</label>
+                        <input type="text" id="metadataExpiresDate" placeholder="YYYY-MM-DD">
+                    </div>
+                    <div class="form-group">
+                        <label for="metadataRecipient">Recipient Identity</label>
+                        <input type="text" id="metadataRecipient">
+                    </div>
+                    <div class="form-group">
+                        <label>Assertion URL</label>
+                        <div id="metadataAssertionUrl" style="font-size: 13px; color: var(--color-text-secondary); word-break: break-all;"></div>
+                    </div>
+                </div>
+                <div class="action-buttons" style="margin-top: 20px; justify-content: flex-end;">
+                    <button class="btn btn-primary btn-sm" onclick="submitMetadata()">Save & Upload</button>
+                    <button class="btn btn-sm" onclick="closeMetadataModal()">Cancel</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Include pako for zlib decompression -->
     <script src="https://cdn.jsdelivr.net/npm/pako@2/dist/pako.min.js"></script>
 
     <script>
         // Configuration
         const API_BASE = '/api';
         let selectedBadgeId = null;
+        let manualBadgeContext = null;
 
         // Initialize
         window.addEventListener('load', () => {
@@ -658,6 +715,13 @@
                             return;
                         }
 
+                        if (badgeData._requiresManualMetadata) {
+                            // Defer upload until user has supplied metadata.
+                            openMetadataModal(badgeData);
+                            showAlert(alertDiv, `Metadata required for ${badgeData._fileName}`, 'info');
+                            return;
+                        }
+
                         try {
                             const formData = new FormData();
                             formData.append('badgeData', JSON.stringify(badgeData));
@@ -702,19 +766,33 @@
             const isSVG = file.name.endsWith('.svg');
 
             try {
+                let data = null;
+
                 if (isJSON) {
                     const content = await file.text();
-                    const data = JSON.parse(content);
-                    return await processBadgeData(data);
+                    data = JSON.parse(content);
                 } else if (isPNG) {
                     const buffer = await file.arrayBuffer();
-                    const data = extractFromPNG(buffer);
-                    if (data) return await processBadgeData(data);
+                    data = extractFromPNG(buffer);
                 } else if (isSVG) {
                     const content = await file.text();
-                    const data = extractFromSVG(content);
-                    if (data) return await processBadgeData(data);
+                    data = extractFromSVG(content);
                 }
+
+                if (!data) {
+                    return null;
+                }
+
+                const badgeData = await processBadgeData(data);
+                if (!badgeData) {
+                    return null;
+                }
+
+                // Attach file context for potential manual metadata entry
+                badgeData._file = file;
+                badgeData._fileName = file.name;
+
+                return badgeData;
             } catch (error) {
                 console.error('Error processing file:', file.name, error);
             }
@@ -903,10 +981,25 @@
         async function processBadgeData(data) {
             if (!data || typeof data !== 'object') return null;
 
+            // If we only have a remote assertion URL, avoid external fetches and require manual metadata.
             if (data._badgeUrl) {
-                const remoteData = await fetchRemoteData(data._badgeUrl);
-                if (!remoteData) return null;
-                data = remoteData;
+                return {
+                    id: 'badge_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+                    version: '2.0',
+                    type: 'RemoteBadge',
+                    badgeName: null,
+                    description: null,
+                    issuerName: null,
+                    issuerUrl: null,
+                    issuerEmail: null,
+                    credentialProvider: 'Unknown',
+                    issuanceDate: null,
+                    expiresDate: null,
+                    recipientIdentity: null,
+                    rawData: data,
+                    _requiresManualMetadata: true,
+                    _badgeUrl: data._badgeUrl
+                };
             }
 
             try {
@@ -926,6 +1019,11 @@
                     badge = parseOB2(data);
                 } else {
                     return null;
+                }
+
+                // If core metadata is missing, mark for manual completion.
+                if (!badge.badgeName || !badge.issuerName) {
+                    badge._requiresManualMetadata = true;
                 }
 
                 return badge;
@@ -1210,6 +1308,98 @@
             selectedBadgeId = null;
         }
 
+        // Open metadata modal for manual entry
+        function openMetadataModal(badgeData) {
+            manualBadgeContext = badgeData;
+
+            document.getElementById('metadataBadgeName').value = badgeData.badgeName || '';
+            document.getElementById('metadataDescription').value = badgeData.description || '';
+            document.getElementById('metadataIssuerName').value = badgeData.issuerName || '';
+            document.getElementById('metadataIssuerUrl').value = badgeData.issuerUrl || '';
+            document.getElementById('metadataIssuerEmail').value = badgeData.issuerEmail || '';
+            document.getElementById('metadataProvider').value = badgeData.credentialProvider || 'Unknown';
+            document.getElementById('metadataIssuanceDate').value = badgeData.issuanceDate || '';
+            document.getElementById('metadataExpiresDate').value = badgeData.expiresDate || '';
+            document.getElementById('metadataRecipient').value = badgeData.recipientIdentity || '';
+            document.getElementById('metadataAssertionUrl').textContent = badgeData._badgeUrl || '';
+
+            document.getElementById('metadataModal').classList.add('active');
+        }
+
+        // Close metadata modal
+        function closeMetadataModal() {
+            document.getElementById('metadataModal').classList.remove('active');
+            manualBadgeContext = null;
+        }
+
+        // Submit manual metadata and upload badge
+        async function submitMetadata() {
+            if (!manualBadgeContext) return;
+
+            const alertDiv = document.getElementById('uploadAlert');
+
+            const badgeName = document.getElementById('metadataBadgeName').value.trim();
+            const issuerName = document.getElementById('metadataIssuerName').value.trim();
+            const description = document.getElementById('metadataDescription').value.trim();
+            const issuerUrl = document.getElementById('metadataIssuerUrl').value.trim();
+            const issuerEmail = document.getElementById('metadataIssuerEmail').value.trim();
+            const provider = document.getElementById('metadataProvider').value.trim() || 'Unknown';
+            const issuanceDate = document.getElementById('metadataIssuanceDate').value.trim();
+            const expiresDate = document.getElementById('metadataExpiresDate').value.trim();
+            const recipient = document.getElementById('metadataRecipient').value.trim();
+
+            if (!badgeName || !issuerName) {
+                showAlert(alertDiv, 'Badge Name and Issuer Name are required.', 'error');
+                return;
+            }
+
+            const base = manualBadgeContext;
+
+            const badgeData = {
+                id: base.id || ('badge_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9)),
+                version: base.version || '2.0',
+                type: base.type || 'ManualBadge',
+                badgeName: badgeName,
+                description: description || null,
+                issuerName: issuerName,
+                issuerUrl: issuerUrl || null,
+                issuerEmail: issuerEmail || null,
+                credentialProvider: provider,
+                issuanceDate: issuanceDate || base.issuanceDate || null,
+                expiresDate: expiresDate || base.expiresDate || null,
+                recipientIdentity: recipient || base.recipientIdentity || null,
+                rawData: base.rawData || {}
+            };
+
+            if (base._badgeUrl) {
+                badgeData.rawData.assertionUrl = base._badgeUrl;
+            }
+            badgeData.rawData.manual = true;
+
+            try {
+                const formData = new FormData();
+                formData.append('badgeData', JSON.stringify(badgeData));
+                formData.append('file', base._file);
+
+                const response = await fetch(`${API_BASE}/badges`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (response.ok) {
+                    showAlert(alertDiv, 'Badge uploaded with manual metadata.', 'success');
+                    closeMetadataModal();
+                    document.getElementById('credentialFile').value = '';
+                    loadBadgesFromBackend();
+                } else {
+                    showAlert(alertDiv, 'Failed to upload badge with manual metadata.', 'error');
+                }
+            } catch (error) {
+                console.error('Error uploading manual badge:', error);
+                showAlert(alertDiv, 'Error uploading manual badge: ' + error.message, 'error');
+            }
+        }
+
         // Delete badge
         async function deleteSelectedBadge() {
             if (!selectedBadgeId) return;
@@ -1256,6 +1446,12 @@
         document.getElementById('detailModal').addEventListener('click', function(event) {
             if (event.target === this) {
                 closeModal();
+            }
+        });
+
+        document.getElementById('metadataModal').addEventListener('click', function(event) {
+            if (event.target === this) {
+                closeMetadataModal();
             }
         });
     </script>
