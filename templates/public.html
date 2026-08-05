@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light dark">
+    <title>Badgepack - Public Badges</title>
+    <style>
+
+        :root {
+            --color-primary: #2196F3;
+            --color-primary-hover: #1976D2;
+            --color-success: #4CAF50;
+            --color-error: #f44336;
+            --color-bg: #f5f5f5;
+            --color-surface: #ffffff;
+            --color-text: #212121;
+            --color-text-secondary: #757575;
+            --color-border: #e0e0e0;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: var(--color-bg);
+            color: var(--color-text);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        header {
+            background-color: var(--color-surface);
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            margin: 0;
+            color: var(--color-primary);
+            font-size: 28px;
+        }
+
+        .subtitle {
+            color: var(--color-text-secondary);
+            margin-top: 8px;
+            font-size: 14px;
+        }
+
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        @media (max-width: 768px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .card {
+            background-color: var(--color-surface);
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .card h2 {
+            margin-top: 0;
+            margin-bottom: 16px;
+            color: var(--color-primary);
+            font-size: 18px;
+            border-bottom: 2px solid var(--color-border);
+            padding-bottom: 12px;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 500;
+            font-size: 14px;
+            color: var(--color-text);
+        }
+
+        input[type="file"],
+        input[type="text"],
+        select,
+        textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--color-border);
+            border-radius: 4px;
+            font-size: 14px;
+            font-family: inherit;
+            color: var(--color-text);
+            background-color: #fafafa;
+        }
+
+        input[type="file"] {
+            padding: 8px;
+        }
+
+        input[type="file"]::file-selector-button {
+            background-color: var(--color-primary);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 12px;
+            font-weight: 500;
+        }
+
+        input[type="file"]::file-selector-button:hover {
+            background-color: var(--color-primary-hover);
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background-color: var(--color-primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: var(--color-primary-hover);
+        }
+
+        .btn-success {
+            background-color: var(--color-success);
+            color: white;
+        }
+
+        .btn-success:hover {
+            background-color: #45a049;
+        }
+
+        .btn-danger {
+            background-color: var(--color-error);
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background-color: #da190b;
+        }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .alert {
+            padding: 12px 16px;
+            border-radius: 4px;
+            margin-bottom: 16px;
+            font-size: 14px;
+        }
+
+        .alert-success {
+            background-color: #e8f5e9;
+            color: #2e7d32;
+            border: 1px solid #c8e6c9;
+        }
+
+        .alert-error {
+            background-color: #ffebee;
+            color: #c62828;
+            border: 1px solid #ffcdd2;
+        }
+
+        .alert-info {
+            background-color: #e3f2fd;
+            color: #1565c0;
+            border: 1px solid #bbdefb;
+        }
+
+        .filters {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+
+        .badge-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 16px;
+            margin-top: 16px;
+        }
+
+        .badge-card {
+            border: 1px solid var(--color-border);
+            border-radius: 6px;
+            padding: 16px;
+            background: #fafafa;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .badge-card:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            transform: translateY(-2px);
+        }
+
+        .badge-card.selected {
+            border-color: var(--color-primary);
+            background-color: #e3f2fd;
+        }
+
+        .badge-image {
+            width: 80px;
+            height: 80px;
+            object-fit: contain;
+            margin-bottom: 12px;
+            background: white;
+            border-radius: 4px;
+            border: 1px solid var(--color-border);
+        }
+
+        .badge-name {
+            font-weight: 600;
+            font-size: 15px;
+            margin-bottom: 8px;
+            color: var(--color-text);
+        }
+
+        .badge-info {
+            font-size: 13px;
+            color: var(--color-text-secondary);
+            line-height: 1.6;
+            margin-bottom: 8px;
+        }
+
+        .badge-dates {
+            font-size: 12px;
+            color: var(--color-text-secondary);
+            margin: 8px 0;
+            padding: 8px 0;
+            border-top: 1px solid var(--color-border);
+            border-bottom: 1px solid var(--color-border);
+        }
+
+        .date-item {
+            margin: 4px 0;
+        }
+
+        .badge-tags {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+
+        .tag {
+            display: inline-block;
+            background-color: var(--color-primary);
+            color: white;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .tag.issuer {
+            background-color: #FF9800;
+        }
+
+        .tag.provider {
+            background-color: #9C27B0;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .stat-box {
+            background: linear-gradient(135deg, var(--color-primary), #1976D2);
+            color: white;
+            padding: 16px;
+            border-radius: 6px;
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .stat-label {
+            font-size: 13px;
+            opacity: 0.9;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--color-text-secondary);
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background-color: var(--color-surface);
+            border-radius: 8px;
+            padding: 24px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+
+        .modal-header {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            border-bottom: 1px solid var(--color-border);
+            padding-bottom: 12px;
+        }
+
+        .modal-close {
+            float: right;
+            font-size: 24px;
+            cursor: pointer;
+            color: var(--color-text-secondary);
+        }
+
+        .modal-close:hover {
+            color: var(--color-text);
+        }
+
+        .modal-badge-image {
+            width: 120px;
+            height: 120px;
+            object-fit: contain;
+            margin-bottom: 16px;
+            background: white;
+            border-radius: 4px;
+            border: 1px solid var(--color-border);
+        }
+
+        .json-display {
+            background-color: #f5f5f5;
+            border: 1px solid var(--color-border);
+            border-radius: 4px;
+            padding: 12px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+            line-height: 1.4;
+        }
+
+        .no-results {
+            text-align: center;
+            padding: 30px;
+            color: var(--color-text-secondary);
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: var(--color-text-secondary);
+        }
+
+        @media (max-width: 480px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .badge-grid {
+                grid-template-columns: 1fr;
+            }
+
+            h1 {
+                font-size: 22px;
+            }
+        }
+    
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --color-bg: #121212;
+                --color-surface: #1e1e1e;
+                --color-text: #e0e0e0;
+                --color-text-secondary: #b0b0b0;
+                --color-border: #333333;
+            }
+
+            body {
+                background-color: var(--color-bg);
+                color: var(--color-text);
+            }
+
+            header,
+            .card {
+                box-shadow: 0 2px 4px rgba(0,0,0,0.6);
+            }
+
+            input[type="file"],
+            input[type="text"],
+            select,
+            textarea {
+                background-color: #1e1e1e;
+                color: var(--color-text);
+                border-color: var(--color-border);
+            }
+
+            .badge-card {
+                background-color: #1e1e1e;
+                background: #1e1e1e;
+                border-color: var(--color-border);
+            }
+
+            .badge-card.selected {
+                background-color: rgba(33, 150, 243, 0.2);
+            }
+
+            .badge-image,
+            .modal-badge-image {
+                background: #121212;
+                border-color: var(--color-border);
+            }
+
+            .json-display {
+                background-color: #1e1e1e;
+                color: var(--color-text);
+                border-color: var(--color-border);
+            }
+
+            .empty-state,
+            .no-results,
+            .loading {
+                color: var(--color-text-secondary);
+            }
+
+            .modal {
+                background-color: rgba(0,0,0,0.7);
+            }
+
+            .modal-content {
+                box-shadow: 0 4px 20px rgba(0,0,0,0.8);
+            }
+        }
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🏆 Badgepack</h1>
+            <p class="subtitle">Published badge catalog (static view)</p>
+        </header>
+
+        <div>
+            <!-- Statistics -->
+            <div class="stats">
+                <div class="stat-box">
+                    <div class="stat-number" id="totalBadges">0</div>
+                    <div class="stat-label">Total Badges</div>
+                </div>
+                <div class="stat-box" style="background: linear-gradient(135deg, #FF9800, #F57C00);">
+                    <div class="stat-number" id="uniqueIssuers">0</div>
+                    <div class="stat-label">Issuers</div>
+                </div>
+                <div class="stat-box" style="background: linear-gradient(135deg, #9C27B0, #7B1FA2);">
+                    <div class="stat-number" id="uniqueProviders">0</div>
+                    <div class="stat-label">Providers</div>
+                </div>
+            </div>
+
+            <!-- Filters -->
+            <div class="filters">
+                <select id="issuerFilter" onchange="applyFilters()">
+                    <option value="">All Issuers</option>
+                </select>
+                <select id="providerFilter" onchange="applyFilters()">
+                    <option value="">All Providers</option>
+                </select>
+                <input type="text" id="searchFilter" placeholder="Search badges..." onkeyup="applyFilters()">
+                <button class="btn btn-sm btn-primary" onclick="clearFilters()">Clear Filters</button>
+            </div>
+
+            <!-- Badges Display -->
+            <div id="badgesContainer">
+                <div class="empty-state">
+                    <div class="empty-state-icon">📋</div>
+                    <p>No badges loaded yet.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detail Modal -->
+    <div id="detailModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <span class="modal-close" onclick="closeModal()">&times;</span>
+                <span id="modalTitle">Badge Details</span>
+            </div>
+            <div id="modalBody"></div>
+            <div class="action-buttons" style="margin-top: 20px; justify-content: flex-end;">
+                <button class="btn btn-primary btn-sm" onclick="closeModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const BADGES = {{ badges | tojson | safe }};
+        let selectedBadgeId = null;
+
+        window.addEventListener('load', () => {
+            updateDisplay(BADGES);
+        });
+
+        function formatDate(dateString) {
+            if (!dateString) return null;
+            try {
+                const date = new Date(dateString);
+                return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+            } catch (e) {
+                return dateString;
+            }
+        }
+
+        function updateDisplay(badges) {
+            updateStats(badges);
+            updateFilters(badges);
+            displayBadges(badges);
+        }
+
+        function updateStats(badges) {
+            document.getElementById('totalBadges').textContent = badges.length;
+            const issuers = new Set(badges.map(b => b.issuerName || b.issuerUrl || 'Unknown').filter(Boolean));
+            document.getElementById('uniqueIssuers').textContent = issuers.size;
+            const providers = new Set(badges.map(b => b.credentialProvider).filter(Boolean));
+            document.getElementById('uniqueProviders').textContent = providers.size;
+        }
+
+        function updateFilters(badges) {
+            const issuers = new Set(badges.map(b => b.issuerName || b.issuerUrl || 'Unknown').filter(Boolean));
+            const providers = new Set(badges.map(b => b.credentialProvider).filter(Boolean));
+            const issuerSelect = document.getElementById('issuerFilter');
+            const providerSelect = document.getElementById('providerFilter');
+            issuerSelect.innerHTML = '<option value="">All Issuers</option>';
+            Array.from(issuers).sort().forEach(issuer => {
+                issuerSelect.innerHTML += `<option value="${issuer}">${issuer}</option>`;
+            });
+            providerSelect.innerHTML = '<option value="">All Providers</option>';
+            Array.from(providers).sort().forEach(provider => {
+                providerSelect.innerHTML += `<option value="${provider}">${provider}</option>`;
+            });
+        }
+
+        function applyFilters() {
+            const issuerFilter = document.getElementById('issuerFilter').value;
+            const providerFilter = document.getElementById('providerFilter').value;
+            const searchFilter = document.getElementById('searchFilter').value.toLowerCase();
+            let filtered = BADGES.slice();
+            if (issuerFilter) {
+                filtered = filtered.filter(b => (b.issuerName || b.issuerUrl || 'Unknown') === issuerFilter);
+            }
+            if (providerFilter) {
+                filtered = filtered.filter(b => b.credentialProvider === providerFilter);
+            }
+            if (searchFilter) {
+                filtered = filtered.filter(b => {
+                    const haystack = (b.badgeName || '') + ' ' + (b.description || '') + ' ' + (b.issuerName || '') + ' ' + (b.issuerUrl || '');
+                    return haystack.toLowerCase().includes(searchFilter);
+                });
+            }
+            displayBadges(filtered);
+        }
+
+        function displayBadges(badges) {
+            const container = document.getElementById('badgesContainer');
+            if (badges.length === 0) {
+                container.innerHTML = '<div class="no-results">No badges match your filters</div>';
+                return;
+            }
+            container.innerHTML = '<div class="badge-grid">' +
+                badges.map(badge => {
+                    let datesHtml = '';
+                    const issuedDate = formatDate(badge.issuanceDate);
+                    const expiresDate = formatDate(badge.expiresDate);
+                    if (issuedDate || expiresDate) {
+                        datesHtml = '<div class="badge-dates">';
+                        if (issuedDate) {
+                            datesHtml += `<div class="date-item">📅 Issued: ${issuedDate}</div>`;
+                        }
+                        if (expiresDate) {
+                            datesHtml += `<div class="date-item">⏰ Expires: ${expiresDate}</div>`;
+                        }
+                        datesHtml += '</div>';
+                    }
+                    const imgHtml = badge.imageDataUri ? `<img src="${badge.imageDataUri}" alt="${badge.badgeName}" class="badge-image">` : '';
+                    return `
+                        <div class="badge-card" onclick="openBadgeDetails('${badge.id}')">
+                            ${imgHtml}
+                            <div class="badge-name">${badge.badgeName || 'Unnamed Badge'}</div>
+                            <div class="badge-info">
+                                <strong>Issuer:</strong> ${badge.issuerName || badge.issuerUrl || 'Unknown'}<br>
+                                <strong>Provider:</strong> ${badge.credentialProvider}
+                            </div>
+                            ${datesHtml}
+                            <div class="badge-tags">
+                                <span class="tag issuer">${badge.issuerName || badge.issuerUrl || 'Unknown'}</span>
+                                <span class="tag provider">${badge.credentialProvider}</span>
+                            </div>
+                        </div>
+                    `;
+                }).join('') +
+            '</div>';
+        }
+
+        function openBadgeDetails(badgeId) {
+            const badge = BADGES.find(b => b.id === badgeId);
+            if (!badge) return;
+            selectedBadgeId = badgeId;
+            document.getElementById('modalTitle').textContent = badge.badgeName || 'Badge Details';
+            let imageHtml = '';
+            if (badge.imageDataUri) {
+                imageHtml = `<img src="${badge.imageDataUri}" alt="${badge.badgeName}" class="modal-badge-image">`;
+            }
+            const details = `
+                <div style="margin-bottom: 20px;">
+                    ${imageHtml}
+                    <div style="margin-bottom: 16px;">
+                        <strong style="font-size: 14px; color: var(--color-text-secondary);">Badge Name</strong>
+                        <div style="font-size: 15px; margin-top: 4px;">${badge.badgeName || 'N/A'}</div>
+                    </div>
+                    <div style="margin-bottom: 16px;">
+                        <strong style="font-size: 14px; color: var(--color-text-secondary);">Description</strong>
+                        <div style="font-size: 14px; margin-top: 4px; line-height: 1.5;">${badge.description || 'N/A'}</div>
+                    </div>
+                    <div style="margin-bottom: 16px;">
+                        <strong style="font-size: 14px; color: var(--color-text-secondary);">Issuer Name</strong>
+                        <div style="font-size: 15px; margin-top: 4px;">${badge.issuerName || 'N/A'}</div>
+                    </div>
+                    <div style="margin-bottom: 16px;">
+                        <strong style="font-size: 14px; color: var(--color-text-secondary);">Issuer URL</strong>
+                        <div style="font-size: 14px; margin-top: 4px; word-break: break-all;">${badge.issuerUrl || 'N/A'}</div>
+                    </div>
+                    <div style="margin-bottom: 16px;">
+                        <strong style="font-size: 14px; color: var(--color-text-secondary);">Credential Provider</strong>
+                        <div style="font-size: 15px; margin-top: 4px;">${badge.credentialProvider}</div>
+                    </div>
+                    ${badge.issuanceDate ? `
+                    <div style="margin-bottom: 16px;">
+                        <strong style="font-size: 14px; color: var(--color-text-secondary);">Issuance Date</strong>
+                        <div style="font-size: 15px; margin-top: 4px;">${formatDate(badge.issuanceDate) || badge.issuanceDate}</div>
+                    </div>
+                    ` : ''}
+                    ${badge.expiresDate ? `
+                    <div style="margin-bottom: 16px;">
+                        <strong style="font-size: 14px; color: var(--color-text-secondary);">Expiration Date</strong>
+                        <div style="font-size: 15px; margin-top: 4px;">${formatDate(badge.expiresDate) || badge.expiresDate}</div>
+                    </div>
+                    ` : ''}
+                    <div style="margin-bottom: 20px;">
+                        <strong style="font-size: 14px; color: var(--color-text-secondary);">Raw JSON Data</strong>
+                        <div class="json-display">${JSON.stringify(badge.rawData || {}, null, 2)}</div>
+                    </div>
+                </div>
+            `;
+            document.getElementById('modalBody').innerHTML = details;
+            document.getElementById('detailModal').classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('detailModal').classList.remove('active');
+            selectedBadgeId = null;
+        }
+
+        document.getElementById('detailModal').addEventListener('click', function(event) {
+            if (event.target === this) {
+                closeModal();
+            }
+        });
+
+        function clearFilters() {
+            document.getElementById('issuerFilter').value = '';
+            document.getElementById('providerFilter').value = '';
+            document.getElementById('searchFilter').value = '';
+            displayBadges(BADGES);
+        }
+    </script>
+</body>
+</html>

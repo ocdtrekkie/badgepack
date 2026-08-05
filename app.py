@@ -5,6 +5,7 @@ from datetime import datetime
 import os
 import json
 import hashlib
+import base64
 from io import BytesIO
 
 # Initialize Flask app
@@ -159,6 +160,9 @@ def upload_badge():
         db.session.add(badge)
         db.session.commit()
         
+        # Update static snapshot for Sandstorm publishing
+        generate_static_snapshot()
+        
         return jsonify(badge.to_dict()), 201
     
     except Exception as e:
@@ -204,6 +208,9 @@ def delete_badge(badge_id):
         
         db.session.delete(badge)
         db.session.commit()
+        
+        # Update static snapshot for Sandstorm publishing
+        generate_static_snapshot()
         
         return jsonify({'message': 'Badge deleted successfully'}), 200
     
@@ -299,6 +306,35 @@ def export_badges():
         return jsonify({'error': str(e)}), 400
 
 # Error handlers
+
+def generate_static_snapshot():
+    """Render a static badge listing page to /var/www for Sandstorm publishing."""
+    try:
+        badges = Badge.query.all()
+        badges_list = []
+        for badge in badges:
+            data = badge.to_dict(include_image=True)
+            image_hex = data.pop('imageData', None)
+            if image_hex:
+                image_bytes = bytes.fromhex(image_hex)
+                mime = data.get('imageMimeType') or 'image/png'
+                data['imageDataUri'] = f"data:{mime};base64,{base64.b64encode(image_bytes).decode('ascii')}"
+            else:
+                data['imageDataUri'] = None
+            badges_list.append(data)
+
+        html = render_template('public.html', badges=badges_list)
+
+        output_dir = '/var/www'
+        os.makedirs(output_dir, exist_ok=True)
+        output_path = os.path.join(output_dir, 'index.html')
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write(html)
+    except Exception as e:
+        # Log but do not break main workflow
+        print('Error generating static snapshot:', e)
+
+
 @app.errorhandler(404)
 def not_found(error):
     return jsonify({'error': 'Not found'}), 404
