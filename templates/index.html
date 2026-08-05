@@ -514,25 +514,41 @@
         </header>
 
         <div class="main-grid">
-            <!-- Upload Card -->
-            <div class="card">
-                <h2>📤 Upload Credentials</h2>
-                <div id="uploadAlert"></div>
-                <div class="form-group">
-                    <label for="credentialFile">Select Badge File(s)</label>
-                    <input type="file" id="credentialFile" accept=".json,.png,.svg" multiple>
-                    <small style="color: var(--color-text-secondary); display: block; margin-top: 8px;">
-                        Upload JSON, PNG, or SVG files containing OpenBadges 2.0 or 3.0 credentials
-                    </small>
-                </div>
-                <button class="btn btn-primary" onclick="uploadCredentials()" style="width: 100%;">
-                    📥 Upload
-                </button>
-                <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--color-border);">
-                    <label style="margin-bottom: 12px;">Backend Status:</label>
-                    <div id="backendStatus" style="font-size: 13px; color: var(--color-text-secondary);">
-                        Checking connection...
+            <!-- Left Column: Upload + Published Catalog -->
+            <div>
+                <!-- Upload Card -->
+                <div class="card">
+                    <h2>📤 Upload Credentials</h2>
+                    <div id="uploadAlert"></div>
+                    <div class="form-group">
+                        <label for="credentialFile">Select Badge File(s)</label>
+                        <input type="file" id="credentialFile" accept=".json,.png,.svg" multiple>
+                        <small style="color: var(--color-text-secondary); display: block; margin-top: 8px;">
+                            Upload JSON, PNG, or SVG files containing OpenBadges 2.0 or 3.0 credentials
+                        </small>
                     </div>
+                    <button class="btn btn-primary" onclick="uploadCredentials()" style="width: 100%;">
+                        📥 Upload
+                    </button>
+                    <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--color-border);">
+                        <label style="margin-bottom: 12px;">Backend Status:</label>
+                        <div id="backendStatus" style="font-size: 13px; color: var(--color-text-secondary);">
+                            Checking connection...
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Published Badge Catalog -->
+                <div class="card" style="margin-top: 20px;">
+                    <h2>🌐 Published Badge Catalog</h2>
+                    <div id="publicUrlAlert"></div>
+                    <p style="margin-bottom: 12px; color: var(--color-text-secondary);">
+                        This grain publishes a static read-only badge catalog from <code>/var/www</code> using Sandstorm's web publishing.
+                    </p>
+                    <button class="btn btn-sm btn-primary" onclick="loadPublicUrl()" style="margin-bottom: 8px;">
+                        Show Public URL
+                    </button>
+                    <div id="publicUrlDisplay" style="margin-top: 4px; font-size: 14px; word-break: break-all;"></div>
                 </div>
             </div>
 
@@ -1430,6 +1446,43 @@
             document.getElementById('providerFilter').value = '';
             document.getElementById('searchFilter').value = '';
             applyFilters();
+        }
+
+        // Load public URL for static published page via backend helper
+        async function loadPublicUrl() {
+            const alertDiv = document.getElementById('publicUrlAlert');
+            const displayDiv = document.getElementById('publicUrlDisplay');
+
+            try {
+                const response = await fetch(`${API_BASE}/public-url`);
+                if (!response.ok) {
+                    showAlert(
+                        alertDiv,
+                        `Failed to retrieve public URL from backend (status ${response.status}).`,
+                        'error'
+                    );
+                    return;
+                }
+
+                const data = await response.json();
+                const url = data.publicUrl || data.autoUrl || null;
+
+                if (!url) {
+                    showAlert(alertDiv, 'Backend did not return a public URL.', 'error');
+                    return;
+                }
+
+                displayDiv.innerHTML =
+                    `<strong>Public URL:</strong> <a href="${url}" target="_blank">${url}</a>`;
+                showAlert(
+                    alertDiv,
+                    'Static badge catalog is available at the URL below.',
+                    'success'
+                );
+            } catch (error) {
+                console.error('Error fetching public URL:', error);
+                showAlert(alertDiv, 'Error fetching public URL: ' + error.message, 'error');
+            }
         }
 
         // Show alert

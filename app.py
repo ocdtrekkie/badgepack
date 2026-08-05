@@ -7,9 +7,11 @@ import json
 import hashlib
 import base64
 from io import BytesIO
+import subprocess
 
 # Initialize Flask app
 instance_path = '/var'
+GET_PUBLIC_ID_HELPER = '/opt/app/sandstorm-integration/getPublicId'
 app = Flask(__name__, template_folder='templates', instance_path=instance_path)
 CORS(app)
 
@@ -69,6 +71,37 @@ class Badge(db.Model):
 # Create database tables
 with app.app_context():
     db.create_all()
+
+def get_public_url_from_helper(session_id):
+    """
+    Invoke the Sandstorm getPublicId helper with the current sessionId
+    and return its output as a URL string, or raise an Exception if something
+    goes wrong.
+    """
+    if not session_id:
+        raise RuntimeError('Missing X-Sandstorm-Session-Id header; cannot call getPublicId')
+
+    if not os.path.exists(GET_PUBLIC_ID_HELPER):
+        raise FileNotFoundError(f'getPublicId helper not found at {GET_PUBLIC_ID_HELPER}')
+
+    result = subprocess.run(
+        [GET_PUBLIC_ID_HELPER, session_id],
+        capture_output=True,
+        text=True,
+        timeout=5,
+    )
+
+    if result.returncode != 0:
+        raise RuntimeError(
+            f'getPublicId exited with code {result.returncode}, stderr={result.stderr.strip()}'
+        )
+
+    output = result.stdout.strip()
+    if not output:
+        raise RuntimeError('getPublicId produced empty stdout')
+
+    # If the helper returns just an ID, adjust here to construct the URL from that ID.
+    return output
 
 # ===== FRONTEND ROUTES =====
 
@@ -304,6 +337,20 @@ def export_badges():
     
     except Exception as e:
         return jsonify({'error': str(e)}), 400
+
+@app.route('/api/public-url', methods=['GET'])
+def get_public_url():
+    """Return the Sandstorm public URL for this grain's static web publishing."""
+    try:
+        # Sandstorm should inject this header on requests to the app
+        session_id = request.headers.get('X-Sandstorm-Session-Id')
+
+        url = get_public_url_from_helper(session_id)
+        return jsonify({'publicUrl': url}), 200
+    except Exception as e:
+        # Log to grain log so you can see exactly what's going wrong
+        print('Error in /api/public-url:', repr(e))
+        return jsonify({'error': str(e)}), 500
 
 # Error handlers
 
