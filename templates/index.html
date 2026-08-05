@@ -1455,30 +1455,42 @@
 
             try {
                 const response = await fetch(`${API_BASE}/public-url`);
+                const data = await response.json().catch(() => ({}));
+
                 if (!response.ok) {
-                    showAlert(
-                        alertDiv,
-                        `Failed to retrieve public URL from backend (status ${response.status}).`,
-                        'error'
-                    );
+                    const msg = data.error
+                        ? `Failed to retrieve public URL from backend (status ${response.status}): ${data.error}`
+                        : `Failed to retrieve public URL from backend (status ${response.status}).`;
+                    showAlert(alertDiv, msg, 'error');
                     return;
                 }
 
-                const data = await response.json();
-                const url = data.publicUrl || data.autoUrl || null;
-
-                if (!url) {
+                // Extract the URL (line #3 from getPublicId)
+                const publicUrl = data.publicUrl || null;
+                if (!publicUrl) {
                     showAlert(alertDiv, 'Backend did not return a public URL.', 'error');
                     return;
                 }
 
+                // Render the link using only the URL
                 displayDiv.innerHTML =
-                    `<strong>Public URL:</strong> <a href="${url}" target="_blank">${url}</a>`;
+                    `<strong>Public URL:</strong> <a href="${publicUrl}" target="_blank">${publicUrl}</a>`;
+
                 showAlert(
                     alertDiv,
                     'Static badge catalog is available at the URL below.',
                     'success'
                 );
+
+                // Optionally keep additional fields for later use (CNAME instructions, etc.)
+                // For example, attach them to a global or use them to populate a hidden panel.
+                window.badgepackPublicInfo = {
+                    grainId: data.grainId,
+                    host: data.host,
+                    publicUrl: data.publicUrl,
+                    autoPublishing: data.autoPublishing,
+                    rawOutput: data.rawOutput
+                };
             } catch (error) {
                 console.error('Error fetching public URL:', error);
                 showAlert(alertDiv, 'Error fetching public URL: ' + error.message, 'error');

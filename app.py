@@ -72,11 +72,14 @@ class Badge(db.Model):
 with app.app_context():
     db.create_all()
 
-def get_public_url_from_helper(session_id):
+def get_public_info_from_helper(session_id):
     """
-    Invoke the Sandstorm getPublicId helper with the current sessionId
-    and return its output as a URL string, or raise an Exception if something
-    goes wrong.
+    Invoke the Sandstorm getPublicId helper with the current sessionId and
+    return a dict containing all fields:
+      - grainId: line 1
+      - host:    line 2
+      - publicUrl: line 3
+      - autoPublishing: line 4 (boolean, if present)
     """
     if not session_id:
         raise RuntimeError('Missing X-Sandstorm-Session-Id header; cannot call getPublicId')
@@ -96,12 +99,30 @@ def get_public_url_from_helper(session_id):
             f'getPublicId exited with code {result.returncode}, stderr={result.stderr.strip()}'
         )
 
-    output = result.stdout.strip()
-    if not output:
+    stdout = result.stdout.strip()
+    if not stdout:
         raise RuntimeError('getPublicId produced empty stdout')
 
-    # If the helper returns just an ID, adjust here to construct the URL from that ID.
-    return output
+    # Split into non-empty lines
+    lines = [line.strip() for line in stdout.splitlines() if line.strip()]
+    if len(lines) < 3:
+        raise RuntimeError(f'Unexpected getPublicId output (need at least 3 lines): {stdout}')
+
+    grain_id = lines[0]
+    host = lines[1]
+    public_url = lines[2]
+    auto_publishing = None
+    if len(lines) >= 4:
+        auto_publishing = lines[3].lower() == 'true'
+
+    return {
+        'grainId': grain_id,
+        'host': host,
+        'publicUrl': public_url,
+        'autoPublishing': auto_publishing,
+        # Also keep the raw output around in case you want to debug later
+        'rawOutput': stdout,
+    }
 
 # ===== FRONTEND ROUTES =====
 
@@ -340,15 +361,12 @@ def export_badges():
 
 @app.route('/api/public-url', methods=['GET'])
 def get_public_url():
-    """Return the Sandstorm public URL for this grain's static web publishing."""
+    """Return the Sandstorm public URL and related info for this grain."""
     try:
-        # Sandstorm should inject this header on requests to the app
         session_id = request.headers.get('X-Sandstorm-Session-Id')
-
-        url = get_public_url_from_helper(session_id)
-        return jsonify({'publicUrl': url}), 200
+        public_info = get_public_info_from_helper(session_id)
+        return jsonify(public_info), 200
     except Exception as e:
-        # Log to grain log so you can see exactly what's going wrong
         print('Error in /api/public-url:', repr(e))
         return jsonify({'error': str(e)}), 500
 
