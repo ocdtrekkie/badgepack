@@ -543,12 +543,22 @@
                     <h2>🌐 Published Badge Catalog</h2>
                     <div id="publicUrlAlert"></div>
                     <p style="margin-bottom: 12px; color: var(--color-text-secondary);">
-                        This grain publishes a static read-only badge catalog from <code>/var/www</code> using Sandstorm's web publishing.
+                        You can share a read-only view of your badge catalog at a public URL, and optionally connect a domain to it.
                     </p>
                     <button class="btn btn-sm btn-primary" onclick="loadPublicUrl()" style="margin-bottom: 8px;">
                         Show Public URL
                     </button>
                     <div id="publicUrlDisplay" style="margin-top: 4px; font-size: 14px; word-break: break-all;"></div>
+
+                    <button class="btn btn-sm"
+                            onclick="toggleDnsInstructions()"
+                            id="dnsToggleBtn"
+                            style="margin-top: 8px;">
+                        Show DNS / CNAME instructions
+                    </button>
+
+                    <div id="dnsInstructions"
+                         style="margin-top: 8px; font-size: 13px; display: none;"></div>
                 </div>
             </div>
 
@@ -1495,6 +1505,69 @@
                 console.error('Error fetching public URL:', error);
                 showAlert(alertDiv, 'Error fetching public URL: ' + error.message, 'error');
             }
+        }
+		
+		// Expand/collapse DNS / CNAME instructions
+        function toggleDnsInstructions() {
+            const panel = document.getElementById('dnsInstructions');
+            const btn = document.getElementById('dnsToggleBtn');
+
+            if (!window.badgepackPublicInfo) {
+                showAlert(
+                    document.getElementById('publicUrlAlert'),
+                    'Load the public URL first so DNS instructions can be generated.',
+                    'info'
+                );
+                return;
+            }
+
+            const isHidden = panel.style.display === 'none' || panel.style.display === '';
+            if (isHidden) {
+                renderDnsInstructions(window.badgepackPublicInfo);
+                panel.style.display = 'block';
+                btn.textContent = 'Hide DNS / CNAME instructions';
+            } else {
+                panel.style.display = 'none';
+                btn.textContent = 'Show DNS / CNAME instructions';
+            }
+        }
+
+        // Build DNS instructions from publicUrl + grainId
+        function renderDnsInstructions(info) {
+            const panel = document.getElementById('dnsInstructions');
+            const publicUrl = info.publicUrl;
+            let cnameTarget = '';
+
+            // Extract host component (no protocol or port)
+            try {
+                const urlObj = new URL(publicUrl);
+                cnameTarget = urlObj.hostname;  // e.g. 17dxmdv5w0q5g63rfszd.local.sandstorm.io
+            } catch (e) {
+                // Fallback if URL parsing fails; better than showing nothing
+                cnameTarget = publicUrl;
+            }
+
+            const grainId = info.grainId;  // publicId for TXT record
+
+            panel.innerHTML = `
+                <p>To use a custom domain such as <code>example.com</code>:</p>
+                <ol style="padding-left: 20px;">
+                    <li>
+                        Create a <strong>CNAME</strong> record for
+                        <code>example.com</code> pointing to
+                        <code>${cnameTarget}</code>
+                    </li>
+                    <li>
+                        Create a <strong>TXT</strong> record at
+                        <code>sandstorm-www.example.com</code> with value
+                        <code>${grainId}</code>
+                    </li>
+                </ol>
+                <p style="color: var(--color-text-secondary);">
+                    Replace <code>example.com</code> with your own domain; keep the CNAME target
+                    and TXT value exactly as shown above.
+                </p>
+            `;
         }
 
         // Show alert

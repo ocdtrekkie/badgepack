@@ -558,8 +558,11 @@ opt/app/.sandstorm/.vagrant
 opt/app/.sandstorm/launcher.sh
 opt/app/app.py
 opt/app/icons
+opt/app/sandstorm-integration
+opt/app/sandstorm-integration/getPublicId
 opt/app/templates
 opt/app/templates/index.html
+opt/app/templates/public.html
 proc/cpuinfo
 sandstorm-http-bridge
 sandstorm-http-bridge-config
@@ -573,6 +576,7 @@ usr/lib/python3.11/__future__.py
 usr/lib/python3.11/__pycache__/__future__.cpython-311.pyc
 usr/lib/python3.11/__pycache__/_compat_pickle.cpython-311.pyc
 usr/lib/python3.11/__pycache__/_compression.cpython-311.pyc
+usr/lib/python3.11/__pycache__/_sysconfigdata__x86_64-linux-gnu.cpython-311.pyc
 usr/lib/python3.11/__pycache__/_weakrefset.cpython-311.pyc
 usr/lib/python3.11/__pycache__/ast.cpython-311.pyc
 usr/lib/python3.11/__pycache__/base64.cpython-311.pyc
@@ -645,6 +649,7 @@ usr/lib/python3.11/__pycache__/zipfile.cpython-311.pyc
 usr/lib/python3.11/_compat_pickle.py
 usr/lib/python3.11/_compression.py
 usr/lib/python3.11/_sysconfigdata__linux_x86_64-linux-gnu.py
+usr/lib/python3.11/_sysconfigdata__x86_64-linux-gnu.py
 usr/lib/python3.11/_weakrefset.py
 usr/lib/python3.11/ast.py
 usr/lib/python3.11/asyncio
